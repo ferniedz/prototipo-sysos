@@ -69,6 +69,8 @@ npm run preview
 
 A suíte Jest testa validações alinhadas ao contrato, formatação de telefone, URLs aninhadas, mapeamento das respostas, Bearer, payloads de POST, confirmação de duplicidade, erros de campos, acesso expirado, falha de rede, cancelamento e renderização dos formulários e estados de consulta. `fetch` é simulado nos testes de contrato; os testes de renderização usam React no ambiente Node, sem navegador.
 
+O ambiente de testes não mantém mais o banco local em memória da primeira versão. Acessos a `localStorage` e `sessionStorage` são bloqueados por mocks, e `fetch` rejeita chamadas sem resposta explicitamente simulada. Assim, os testes não dependem de uma API em execução nem de dados reais. Os mocks são restaurados e o ambiente é reiniciado entre os casos. Testes de renderização não exercitam cliques, submissão de formulários ou efeitos de consulta; esses fluxos continuam no roteiro manual ou exigem uma suíte de interação com DOM.
+
 Na pasta backend, `npm test -- --runInBand cors.test.ts` exercita o Express em memória, sem porta ou PostgreSQL: preflight, origens, JWT, cadastro, duplicidade, busca e separação dos equipamentos por cliente. A suíte HTTP original usa Supertest e precisa de permissão para abrir portas. A integração Prisma exige banco de testes e apaga tabelas, conforme o README do backend; não foi executada nesta adaptação.
 
 Roteiro manual com a API e um banco de desenvolvimento:

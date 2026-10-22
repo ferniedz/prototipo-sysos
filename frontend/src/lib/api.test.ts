@@ -132,3 +132,80 @@ test('perfil do token só controla apresentação; não substitui autorização 
   expect(tokenProfile(token)).toBe('TECNICO')
   expect(tokenProfile('invalido')).toBeNull()
 })
+
+test('cliente com somente e-mail é enviado sem telefone vazio nem identificador gerado localmente', async () => {
+  reply({ ...customer, telefone: null, email: 'ana@example.com' }, 201)
+  const client = await createApi(base, 'jwt').createClient({ name: ' Ana Souza ', phone: '', email: ' ana@example.com ' })
+  expect(JSON.parse(fetchMock.mock.calls[0][1]!.body as string)).toEqual({ nome: 'Ana Souza', email: 'ana@example.com' })
+  expect(client.phone).toBe('')
+  expect(client.email).toBe('ana@example.com')
+  expect(client.code).toBe('#7')
+})
+
+test('equipamento envia marca, modelo e série com os nomes e limites do contrato atual', async () => {
+  reply({ ...equipment, marca: 'Dell', modelo: 'Inspiron', numeroSerie: 'SERIE-123' }, 201)
+  const created = await createApi(base, 'jwt').createEquipment({ clientId: '7', type: ' Notebook ', brand: ' Dell ', model: ' Inspiron ', serial: ' SERIE-123 ' })
+  expect(fetchMock.mock.calls[0][0]).toBe(`${base}/clientes/7/equipamentos`)
+  expect(JSON.parse(fetchMock.mock.calls[0][1]!.body as string)).toEqual({ tipo: 'Notebook', marca: 'Dell', modelo: 'Inspiron', numeroSerie: 'SERIE-123' })
+  expect(created).toMatchObject({ id: '7:1', clientId: '7', code: '1', brand: 'Dell', model: 'Inspiron', serial: 'SERIE-123' })
+})
+
+test('campos opcionais nulos da API viram campos vazios para a interface', () => {
+  expect(clientFromApi({ ...customer, telefone: null, email: 'ana@example.com' })).toMatchObject({ phone: '', email: 'ana@example.com' })
+  expect(equipmentFromApi(equipment)).toMatchObject({ brand: '', model: '', serial: '' })
+})
+
+test('erros de equipamento são associados aos campos do formulário sem perder a mensagem da API', async () => {
+  reply({ erro: { codigo: 'DADOS_INVALIDOS', mensagem: 'Revise o equipamento.', detalhes: [
+    { campo: 'tipo', mensagem: 'Informe o tipo.' },
+    { campo: 'marca', mensagem: 'Marca muito longa.' },
+    { campo: 'modelo', mensagem: 'Modelo muito longo.' },
+    { campo: 'numeroSerie', mensagem: 'Série muito longa.' },
+  ] } }, 400)
+  await expect(createApi(base, 'jwt').createEquipment({ clientId: '7', type: '', brand: '', model: '', serial: '' })).rejects.toMatchObject({
+    status: 400, message: 'Revise o equipamento.',
+    fields: { type: 'Informe o tipo.', brand: 'Marca muito longa.', model: 'Modelo muito longo.', serial: 'Série muito longa.' },
+  })
+})
+
+test('equipamento não encontrado não dispara busca em outro cliente ou rota global', async () => {
+  reply({ erro: { codigo: 'EQUIPAMENTO_NAO_ENCONTRADO', mensagem: 'Equipamento não encontrado.' } }, 404)
+  await expect(createApi(base, 'jwt').getEquipment('7', '99')).rejects.toMatchObject({ status: 404, code: 'EQUIPAMENTO_NAO_ENCONTRADO' })
+  expect(fetchMock).toHaveBeenCalledTimes(1)
+  expect(fetchMock.mock.calls[0][0]).toBe(`${base}/clientes/7/equipamentos/99`)
+})
+
+test('401 limpa o acesso mesmo quando o servidor devolve um corpo que não é JSON', async () => {
+  const onUnauthorized = jest.fn()
+  fetchMock.mockResolvedValueOnce(new Response('Unauthorized', { status: 401 }))
+  await expect(createApi(base, 'jwt', onUnauthorized).getClient('7')).rejects.toMatchObject({ status: 401, code: 'RESPOSTA_INVALIDA' })
+  expect(onUnauthorized).toHaveBeenCalledTimes(1)
+})
+
+test.each(['cliente', 'equipamento'] as const)('falha no POST de %s não produz um cadastro local ou sucesso falso', async resource => {
+  reply({ erro: { codigo: 'FALHA_AO_GRAVAR', mensagem: 'Não foi possível concluir o registro.' } }, 500)
+  const api = createApi(base, 'jwt')
+  const request = resource === 'cliente'
+    ? api.createClient({ name: 'Ana Souza', phone: '', email: 'ana@example.com' })
+    : api.createEquipment({ clientId: '7', type: 'Notebook', brand: '', model: '', serial: '' })
+  await expect(request).rejects.toMatchObject({ status: 500, code: 'FALHA_AO_GRAVAR' })
+  expect(fetchMock).toHaveBeenCalledTimes(1)
+  expect(localStorage.setItem).not.toHaveBeenCalled()
+  expect(sessionStorage.setItem).not.toHaveBeenCalled()
+})
+
+test.each(['cliente', 'lista', 'equipamento'] as const)('consulta de %s encaminha o sinal de cancelamento sem gravar dados', async resource => {
+  const controller = new AbortController()
+  const api = createApi(base, 'jwt')
+  if (resource === 'cliente') reply(customer)
+  else if (resource === 'lista') reply({ equipamentos: [equipment], total: 1 })
+  else reply(equipment)
+  const request = resource === 'cliente' ? api.getClient('7', controller.signal)
+    : resource === 'lista' ? api.listEquipment('7', controller.signal)
+    : api.getEquipment('7', '1', controller.signal)
+  await request
+  const init = fetchMock.mock.calls[0][1]!
+  expect(init.signal).toBe(controller.signal)
+  expect(init.body).toBeUndefined()
+  expect(localStorage.setItem).not.toHaveBeenCalled()
+})

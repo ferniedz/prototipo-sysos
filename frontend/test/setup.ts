@@ -1,21 +1,33 @@
-import { afterAll, beforeEach } from '@jest/globals'
+import { afterAll, beforeEach, jest } from '@jest/globals'
 
-// Armazenamento em memória: os testes nunca acessam cadastros reais do navegador.
-class MemoryStorage implements Storage {
-  private data = new Map<string, string>()
-  get length() { return this.data.size }
-  clear() { this.data.clear() }
-  getItem(key: string) { return this.data.get(key) ?? null }
-  key(index: number) { return [...this.data.keys()][index] ?? null }
-  removeItem(key: string) { this.data.delete(key) }
-  setItem(key: string, value: string) { this.data.set(key, String(value)) }
+// A versão atual usa a API. Os testes não devem persistir cadastros ou tokens
+// no navegador, nem fazer requisições de rede que não tenham sido simuladas.
+const storageNames = ['localStorage', 'sessionStorage'] as const
+const originalStorages = new Map(storageNames.map(name => [name, Object.getOwnPropertyDescriptor(globalThis, name)]))
+
+function blockedStorage(name: string): Storage {
+  const rejectAccess = () => { throw new Error(`Uso inesperado de ${name}: os cadastros pertencem à API e o token fica na memória.`) }
+  return {
+    length: 0,
+    clear: jest.fn(rejectAccess),
+    getItem: jest.fn(rejectAccess),
+    key: jest.fn(rejectAccess),
+    removeItem: jest.fn(rejectAccess),
+    setItem: jest.fn(rejectAccess),
+  }
 }
 
-const originalStorage = Object.getOwnPropertyDescriptor(globalThis, 'localStorage')
 beforeEach(() => {
-  Object.defineProperty(globalThis, 'localStorage', { configurable: true, value: new MemoryStorage() })
+  for (const name of storageNames) {
+    Object.defineProperty(globalThis, name, { configurable: true, value: blockedStorage(name) })
+  }
+  jest.spyOn(globalThis, 'fetch').mockRejectedValue(new Error('Requisição não simulada: configure a resposta de fetch no teste.'))
 })
+
 afterAll(() => {
-  if (originalStorage) Object.defineProperty(globalThis, 'localStorage', originalStorage)
-  else Reflect.deleteProperty(globalThis, 'localStorage')
+  for (const name of storageNames) {
+    const descriptor = originalStorages.get(name)
+    if (descriptor) Object.defineProperty(globalThis, name, descriptor)
+    else Reflect.deleteProperty(globalThis, name)
+  }
 })

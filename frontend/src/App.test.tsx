@@ -7,14 +7,17 @@ import { createApi } from './lib/api'
 const api = createApi('http://localhost:3000/api', 'token')
 
 test('não carrega cadastros locais nem consulta a API sem informar o token', () => {
-  const storage = jest.spyOn(localStorage, 'getItem')
   const fetchMock = jest.spyOn(globalThis, 'fetch')
   const html = renderToStaticMarkup(<App />)
   expect(html).toContain('Informe o acesso à API')
   expect(html).toContain('Conectar à API')
   expect(html).not.toContain('Clientes cadastrados')
   expect(html).not.toContain('Protótipo local')
-  expect(storage).not.toHaveBeenCalled()
+  for (const storage of [localStorage, sessionStorage]) {
+    for (const method of ['getItem', 'setItem', 'removeItem', 'clear', 'key'] as const) {
+      expect(storage[method]).not.toHaveBeenCalled()
+    }
+  }
   expect(fetchMock).not.toHaveBeenCalled()
 })
 
