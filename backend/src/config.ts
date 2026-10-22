@@ -1,7 +1,10 @@
+import { configurarOrigens } from './http/cors';
+
 /** RNF: credenciais só em variáveis de ambiente, nunca no repositório. */
 export interface Config {
   porta: number;
   jwtSegredo: string;
+  origensCors: string[];
 }
 
 export function carregarConfig(env: NodeJS.ProcessEnv = process.env): Config {
@@ -12,5 +15,5 @@ export function carregarConfig(env: NodeJS.ProcessEnv = process.env): Config {
   if (!env['DATABASE_URL']) {
     throw new Error('DATABASE_URL ausente.');
   }
-  return { porta: Number(env['PORT'] ?? 3000), jwtSegredo };
+  return { porta: Number(env['PORT'] ?? 3000), jwtSegredo, origensCors: configurarOrigens(env['CORS_ORIGINS']) };
 }
