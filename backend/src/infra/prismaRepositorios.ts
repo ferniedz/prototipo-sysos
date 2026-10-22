@@ -1,0 +1,140 @@
+import { Prisma, PrismaClient } from '@prisma/client';
+import {
+  Cliente,
+  ClienteRepositorio,
+  Equipamento,
+  EquipamentoRepositorio,
+  NovoCliente,
+  NovoEquipamento,
+} from '../dominio/tipos';
+
+/** Única camada que conhece o Prisma/PostgreSQL. */
+
+export class ClientePrismaRepositorio implements ClienteRepositorio {
+  constructor(private readonly prisma: PrismaClient) {}
+
+  async criar(dados: NovoCliente): Promise<Cliente> {
+    const c = await this.prisma.cliente.create({
+      data: {
+        nome: dados.nome,
+        telefone: dados.telefone,
+        email: dados.email,
+        criadoPorId: dados.criadoPorId,
+      },
+    });
+    return paraCliente(c);
+  }
+
+  async buscarPorId(id: number): Promise<Cliente | null> {
+    const c = await this.prisma.cliente.findUnique({ where: { id } });
+    return c ? paraCliente(c) : null;
+  }
+
+  async buscarPorTexto(termo: string, limite: number): Promise<Cliente[]> {
+    const digitos = termo.replace(/\D/g, '');
+    const lista = await this.prisma.cliente.findMany({
+      where: {
+        OR: [
+          { nome: { contains: termo, mode: 'insensitive' } },
+          { email: { contains: termo.toLowerCase() } },
+          ...(digitos.length >= 4 ? [{ telefone: { contains: digitos } }] : []),
+        ],
+      },
+      orderBy: [{ nome: 'asc' }, { id: 'asc' }],
+      take: limite,
+    });
+    return lista.map(paraCliente);
+  }
+
+  async buscarCandidatosDuplicidade(criterio: {
+    nome: string;
+    telefone: string | null;
+    email: string | null;
+  }): Promise<Cliente[]> {
+    const lista = await this.prisma.cliente.findMany({
+      where: {
+        OR: [
+          { nome: { equals: criterio.nome, mode: 'insensitive' } },
+          ...(criterio.telefone ? [{ telefone: criterio.telefone }] : []),
+          ...(criterio.email ? [{ email: criterio.email }] : []),
+        ],
+      },
+      orderBy: { id: 'asc' },
+      take: 10,
+    });
+    return lista.map(paraCliente);
+  }
+}
+
+export class EquipamentoPrismaRepositorio implements EquipamentoRepositorio {
+  constructor(private readonly prisma: PrismaClient) {}
+
+  /**
+   * Transação única: o UPDATE com incremento trava a linha do cliente, então
+   * dois cadastros simultâneos nunca recebem o mesmo codigoInterno. Se o
+   * INSERT falhar, o incremento também é desfeito (sem registro pela metade).
+   */
+  async criarParaCliente(
+    clienteId: number,
+    dados: NovoEquipamento,
+  ): Promise<Equipamento | null> {
+    try {
+      const criado = await this.prisma.$transaction(async (tx: Prisma.TransactionClient) => {
+        const cliente = await tx.cliente.update({
+          where: { id: clienteId },
+          data: { proximoCodigoEquipamento: { increment: 1 } },
+          select: { proximoCodigoEquipamento: true },
+        });
+        return tx.equipamento.create({
+          data: {
+            clienteId,
+            codigoInterno: cliente.proximoCodigoEquipamento - 1,
+            tipo: dados.tipo,
+            marca: dados.marca,
+            modelo: dados.modelo,
+            numeroSerie: dados.numeroSerie,
+            criadoPorId: dados.criadoPorId,
+          },
+        });
+      });
+      return criado;
+    } catch (e) {
+      // P2025: registro a atualizar não existe (cliente inexistente)
+      if (typeof e === 'object' && e !== null && (e as { code?: string }).code === 'P2025') {
+        return null;
+      }
+      throw e;
+    }
+  }
+
+  async listarPorCliente(clienteId: number): Promise<Equipamento[]> {
+    return this.prisma.equipamento.findMany({
+      where: { clienteId },
+      orderBy: { codigoInterno: 'asc' },
+    });
+  }
+
+  async buscar(clienteId: number, codigoInterno: number): Promise<Equipamento | null> {
+    return this.prisma.equipamento.findUnique({
+      where: { clienteId_codigoInterno: { clienteId, codigoInterno } },
+    });
+  }
+}
+
+function paraCliente(c: {
+  id: number;
+  nome: string;
+  telefone: string | null;
+  email: string | null;
+  criadoEm: Date;
+  criadoPorId: number;
+}): Cliente {
+  return {
+    id: c.id,
+    nome: c.nome,
+    telefone: c.telefone,
+    email: c.email,
+    criadoEm: c.criadoEm,
+    criadoPorId: c.criadoPorId,
+  };
+}
