@@ -31,13 +31,31 @@ export const erros = {
     ),
   equipamentoNaoEncontrado: () =>
     new AppError(404, 'EQUIPAMENTO_NAO_ENCONTRADO', 'Equipamento não encontrado.'),
-  possivelDuplicidade: (candidatos: unknown) =>
+  possivelDuplicidade: (
+    candidatos: unknown,
+    operacao: 'cadastro' | 'alteração' = 'cadastro',
+  ) =>
     new AppError(
       409,
       'POSSIVEL_CLIENTE_DUPLICADO',
       'Já existe cliente com nome ou contato semelhante. Confira os candidatos ' +
-        'e, se for realmente outra pessoa, repita o cadastro com confirmarDuplicidade=true.',
+        `e, se for realmente outra pessoa, repita o ${operacao} com confirmarDuplicidade=true.`,
       { candidatos },
+    ),
+  // RN20: nada apaga o histórico; vínculo existente impede a exclusão.
+  clienteComVinculos: () =>
+    new AppError(
+      409,
+      'CLIENTE_COM_VINCULOS',
+      'Este cliente possui equipamentos ou ordens de serviço vinculados e não ' +
+        'pode ser excluído. O histórico é preservado.',
+    ),
+  equipamentoComVinculos: () =>
+    new AppError(
+      409,
+      'EQUIPAMENTO_COM_VINCULOS',
+      'Este equipamento possui ordens de serviço vinculadas e não pode ser ' +
+        'excluído. O histórico é preservado.',
     ),
   falhaGravacao: () =>
     new AppError(

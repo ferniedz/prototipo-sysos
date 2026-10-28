@@ -30,8 +30,13 @@ model Cliente {
 
   // RN22: quem fez e quando. criadoPorId vem do token (funcionário
   // autenticado); sem FK porque a tabela de contas pertence ao PB01/PB08.
-  criadoEm    DateTime @default(now())
-  criadoPorId Int
+  // atualizadoEm/atualizadoPorId: última correção do cadastro (nulos se nunca
+  // alterado). Preenchidos pelo código, sem @updatedAt, para continuarem nulos
+  // na criação.
+  criadoEm        DateTime  @default(now())
+  criadoPorId     Int
+  atualizadoEm    DateTime?
+  atualizadoPorId Int?
 
   equipamentos Equipamento[]
 
@@ -49,8 +54,10 @@ model Equipamento {
   modelo      String? @db.VarChar(80)
   numeroSerie String? @db.VarChar(80) // opcional (RN09)
 
-  criadoEm    DateTime @default(now())
-  criadoPorId Int
+  criadoEm        DateTime  @default(now())
+  criadoPorId     Int
+  atualizadoEm    DateTime?
+  atualizadoPorId Int?
 
   // RN20: cliente com equipamento/OS não pode ser excluído (Restrict).
   cliente Cliente @relation(fields: [clienteId], references: [id], onDelete: Restrict, onUpdate: Restrict)

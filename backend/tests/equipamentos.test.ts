@@ -111,20 +111,17 @@ describe('Equipamento — entidade fraca vinculada ao cliente (RF07, RN01, RN09)
     expect((await api.get('/api/clientes/999/equipamentos').set(atendente)).status).toBe(404);
   });
 
-  it('RN20: não há exclusão nem alteração de cliente/equipamento nesta entrega', async () => {
+  it('PATCH não faz parte do contrato (a alteração é via PUT): 404 e nada muda', async () => {
     const { api, atendente, idA, banco } = await comClientes();
     await api.post(`/api/clientes/${idA}/equipamentos`).set(atendente).send({ tipo: 'Notebook' });
 
-    for (const [metodo, rota] of [
-      ['delete', `/api/clientes/${idA}`],
-      ['delete', `/api/clientes/${idA}/equipamentos/1`],
-      ['put', `/api/clientes/${idA}`],
-      ['patch', `/api/clientes/${idA}/equipamentos/1`],
-    ] as const) {
-      const r = await api[metodo](rota).set(atendente).send({ nome: 'X' });
+    for (const rota of [`/api/clientes/${idA}`, `/api/clientes/${idA}/equipamentos/1`]) {
+      const r = await api.patch(rota).set(atendente).send({ nome: 'X', tipo: 'X' });
       expect(r.status).toBe(404);
     }
     expect(banco.clientes).toHaveLength(2);
     expect(banco.equipamentos).toHaveLength(1);
+    expect(banco.clientes[0]!.nome).not.toBe('X');
+    expect(banco.equipamentos[0]!.tipo).toBe('Notebook');
   });
 });

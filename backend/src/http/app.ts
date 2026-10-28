@@ -73,6 +73,29 @@ export function criarApp(dep: Dependencias): Express {
     }),
   );
 
+  // PB18: PUT substitui os dados editáveis (mesmo corpo do POST). O id nunca
+  // muda. Possível duplicidade segue a mesma regra do cadastro (RN08).
+  api.put(
+    '/clientes/:clienteId',
+    ESCRITA,
+    aguardar(async (req, res) => {
+      const id = idParam.parse(req.params['clienteId']);
+      const entrada = clienteSchema.parse(req.body);
+      res.json(await clienteServico.atualizar(id, entrada, req.usuario!));
+    }),
+  );
+
+  // RN20: só exclui cliente sem equipamentos/OS (409 CLIENTE_COM_VINCULOS).
+  // Responde 200 com o cadastro excluído (o corpo JSON facilita o cliente HTTP).
+  api.delete(
+    '/clientes/:clienteId',
+    ESCRITA,
+    aguardar(async (req, res) => {
+      const id = idParam.parse(req.params['clienteId']);
+      res.json(await clienteServico.excluir(id));
+    }),
+  );
+
   // --- Equipamentos: entidade fraca, sempre aninhada no cliente (RF07, RF08)
   api.post(
     '/clientes/:clienteId/equipamentos',
@@ -108,8 +131,28 @@ export function criarApp(dep: Dependencias): Express {
     }),
   );
 
-  // Nenhuma rota de exclusão: RN20 (nada apaga histórico; cliente com
-  // equipamento/OS não é excluído). Correção de cadastro = PB18 (fora do escopo).
+  api.put(
+    '/clientes/:clienteId/equipamentos/:codigoInterno',
+    ESCRITA,
+    aguardar(async (req, res) => {
+      const clienteId = idParam.parse(req.params['clienteId']);
+      const codigo = idParam.parse(req.params['codigoInterno']);
+      const entrada = equipamentoSchema.parse(req.body);
+      res.json(await equipamentoServico.atualizar(clienteId, codigo, entrada, req.usuario!));
+    }),
+  );
+
+  api.delete(
+    '/clientes/:clienteId/equipamentos/:codigoInterno',
+    ESCRITA,
+    aguardar(async (req, res) => {
+      const clienteId = idParam.parse(req.params['clienteId']);
+      const codigo = idParam.parse(req.params['codigoInterno']);
+      res.json(await equipamentoServico.excluir(clienteId, codigo));
+    }),
+  );
+
+  // Rota desconhecida (ex.: PATCH, que não é usado): 404 padronizado.
   api.use((_req, _res, next) => {
     next(new AppError(404, 'ROTA_NAO_ENCONTRADA', 'Recurso não encontrado.'));
   });

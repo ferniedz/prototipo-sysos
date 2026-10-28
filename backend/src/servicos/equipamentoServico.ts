@@ -54,6 +54,59 @@ export class EquipamentoServico {
     return eq;
   }
 
+  /**
+   * PB18. Substitui os dados editáveis do equipamento. O dono e o código
+   * interno são a identidade (entidade fraca) e não podem ser alterados;
+   * campos opcionais omitidos passam a vazios.
+   */
+  async atualizar(
+    clienteId: number,
+    codigoInterno: number,
+    entrada: EquipamentoEntrada,
+    usuario: Usuario,
+  ): Promise<Equipamento> {
+    await this.exigirCliente(clienteId);
+    try {
+      const atualizado = await this.equipamentos.atualizar(clienteId, codigoInterno, {
+        tipo: entrada.tipo,
+        marca: entrada.marca ?? null,
+        modelo: entrada.modelo ?? null,
+        numeroSerie: entrada.numeroSerie ?? null,
+        atualizadoPorId: usuario.id, // RN22
+      });
+      if (!atualizado) throw erros.equipamentoNaoEncontrado();
+      return atualizado;
+    } catch (e) {
+      if (e instanceof AppError) throw e;
+      registrarFalha('alteração de equipamento', e);
+      throw erros.falhaGravacao(); // RF12
+    }
+  }
+
+  /**
+   * RN20: nada apaga o histórico. O equipamento com OS vinculada não é
+   * excluído (a recusa vem do banco). O código interno excluído não é
+   * reaproveitado: o contador do cliente só cresce. Devolve o excluído.
+   */
+  async excluir(clienteId: number, codigoInterno: number): Promise<Equipamento> {
+    await this.exigirCliente(clienteId);
+    let resultado;
+    try {
+      resultado = await this.equipamentos.excluir(clienteId, codigoInterno);
+    } catch (e) {
+      registrarFalha('exclusão de equipamento', e);
+      throw erros.falhaGravacao();
+    }
+    switch (resultado.resultado) {
+      case 'EXCLUIDO':
+        return resultado.registro;
+      case 'EM_USO':
+        throw erros.equipamentoComVinculos();
+      case 'NAO_ENCONTRADO':
+        throw erros.equipamentoNaoEncontrado();
+    }
+  }
+
   private async exigirCliente(clienteId: number): Promise<void> {
     if (!(await this.clientes.buscarPorId(clienteId))) {
       throw erros.clienteNaoEncontrado();

@@ -64,6 +64,71 @@ export class ClienteServico {
     if (!cliente) throw erros.clienteNaoEncontrado();
     return cliente;
   }
+
+  /**
+   * PB18 + RN07 + RN08. Substitui os dados editáveis do cliente (mesmas regras
+   * do cadastro). O identificador e os vínculos com equipamentos/OS não mudam.
+   * A checagem de duplicidade ignora o próprio cliente.
+   */
+  async atualizar(
+    id: number,
+    entrada: ClienteEntrada,
+    usuario: Usuario,
+  ): Promise<Cliente> {
+    await this.obter(id);
+    const telefone = entrada.telefone ?? null;
+    const email = entrada.email ?? null;
+
+    if (!entrada.confirmarDuplicidade) {
+      const candidatos = await this.repo.buscarCandidatosDuplicidade({
+        nome: entrada.nome,
+        telefone,
+        email,
+        ignorarId: id,
+      });
+      if (candidatos.length > 0) {
+        throw erros.possivelDuplicidade(candidatos.map(paraResumo), 'alteração');
+      }
+    }
+
+    try {
+      const atualizado = await this.repo.atualizar(id, {
+        nome: entrada.nome,
+        telefone,
+        email,
+        atualizadoPorId: usuario.id, // RN22
+      });
+      if (!atualizado) throw erros.clienteNaoEncontrado();
+      return atualizado;
+    } catch (e) {
+      if (e instanceof AppError) throw e;
+      registrarFalha('alteração de cliente', e);
+      throw erros.falhaGravacao(); // RF12
+    }
+  }
+
+  /**
+   * RN20: nada apaga o histórico. Só é excluído o cliente sem equipamentos
+   * nem OS; a recusa vem do próprio banco (FK com RESTRICT), sem corrida
+   * entre "conferir" e "apagar". Devolve o cadastro excluído.
+   */
+  async excluir(id: number): Promise<Cliente> {
+    let resultado;
+    try {
+      resultado = await this.repo.excluir(id);
+    } catch (e) {
+      registrarFalha('exclusão de cliente', e);
+      throw erros.falhaGravacao();
+    }
+    switch (resultado.resultado) {
+      case 'EXCLUIDO':
+        return resultado.registro;
+      case 'EM_USO':
+        throw erros.clienteComVinculos();
+      case 'NAO_ENCONTRADO':
+        throw erros.clienteNaoEncontrado();
+    }
+  }
 }
 
 function paraResumo(c: Cliente) {
