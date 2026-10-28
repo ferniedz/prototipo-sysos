@@ -13,6 +13,7 @@ const app = criarApp({
   clientes: new ClientePrismaRepositorio(prisma),
   equipamentos: new EquipamentoPrismaRepositorio(prisma),
   jwtSegredo: config.jwtSegredo,
+  origensCors: config.origensCors,
 });
 
 const servidor = app.listen(config.porta, () => {

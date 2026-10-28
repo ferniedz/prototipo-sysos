@@ -10,11 +10,13 @@ import { ClienteServico } from '../servicos/clienteServico';
 import { EquipamentoServico } from '../servicos/equipamentoServico';
 import { AppError } from '../shared/erros';
 import { aguardar, autenticar, exigirPerfil, tratarErros } from './middlewares';
+import { cors, ORIGENS_PADRAO } from './cors';
 
 export interface Dependencias {
   clientes: ClienteRepositorio;
   equipamentos: EquipamentoRepositorio;
   jwtSegredo: string;
+  origensCors?: readonly string[];
 }
 
 /**
@@ -31,6 +33,7 @@ export function criarApp(dep: Dependencias): Express {
 
   const app = express();
   app.disable('x-powered-by');
+  app.use(cors(dep.origensCors ?? ORIGENS_PADRAO));
   app.use(express.json({ limit: '10kb' }));
 
   // Verificação de saúde para a hospedagem; não expõe nenhum dado.
