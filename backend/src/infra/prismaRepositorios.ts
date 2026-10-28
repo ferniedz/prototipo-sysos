@@ -1,14 +1,26 @@
 import { Prisma, PrismaClient } from '@prisma/client';
 import {
+  AtualizacaoCliente,
+  AtualizacaoEquipamento,
   Cliente,
   ClienteRepositorio,
   Equipamento,
   EquipamentoRepositorio,
   NovoCliente,
   NovoEquipamento,
+  ResultadoExclusao,
 } from '../dominio/tipos';
 
 /** Única camada que conhece o Prisma/PostgreSQL. */
+
+function codigoPrisma(e: unknown): string | undefined {
+  return typeof e === 'object' && e !== null ? (e as { code?: string }).code : undefined;
+}
+
+/** P2025: registro não existe. */
+const NAO_ENCONTRADO = 'P2025';
+/** P2003/P2014: o banco recusou por haver registros dependentes (RESTRICT). */
+const EM_USO = ['P2003', 'P2014'];
 
 export class ClientePrismaRepositorio implements ClienteRepositorio {
   constructor(private readonly prisma: PrismaClient) {}
@@ -50,6 +62,7 @@ export class ClientePrismaRepositorio implements ClienteRepositorio {
     nome: string;
     telefone: string | null;
     email: string | null;
+    ignorarId?: number;
   }): Promise<Cliente[]> {
     const lista = await this.prisma.cliente.findMany({
       where: {
@@ -58,11 +71,43 @@ export class ClientePrismaRepositorio implements ClienteRepositorio {
           ...(criterio.telefone ? [{ telefone: criterio.telefone }] : []),
           ...(criterio.email ? [{ email: criterio.email }] : []),
         ],
+        ...(criterio.ignorarId !== undefined ? { NOT: { id: criterio.ignorarId } } : {}),
       },
       orderBy: { id: 'asc' },
       take: 10,
     });
     return lista.map(paraCliente);
+  }
+
+  async atualizar(id: number, dados: AtualizacaoCliente): Promise<Cliente | null> {
+    try {
+      const c = await this.prisma.cliente.update({
+        where: { id },
+        data: {
+          nome: dados.nome,
+          telefone: dados.telefone,
+          email: dados.email,
+          atualizadoEm: new Date(),
+          atualizadoPorId: dados.atualizadoPorId,
+        },
+      });
+      return paraCliente(c);
+    } catch (e) {
+      if (codigoPrisma(e) === NAO_ENCONTRADO) return null;
+      throw e;
+    }
+  }
+
+  async excluir(id: number): Promise<ResultadoExclusao<Cliente>> {
+    try {
+      const c = await this.prisma.cliente.delete({ where: { id } });
+      return { resultado: 'EXCLUIDO', registro: paraCliente(c) };
+    } catch (e) {
+      const codigo = codigoPrisma(e);
+      if (codigo === NAO_ENCONTRADO) return { resultado: 'NAO_ENCONTRADO' };
+      if (codigo !== undefined && EM_USO.includes(codigo)) return { resultado: 'EM_USO' };
+      throw e;
+    }
   }
 }
 
@@ -119,6 +164,48 @@ export class EquipamentoPrismaRepositorio implements EquipamentoRepositorio {
       where: { clienteId_codigoInterno: { clienteId, codigoInterno } },
     });
   }
+
+  async atualizar(
+    clienteId: number,
+    codigoInterno: number,
+    dados: AtualizacaoEquipamento,
+  ): Promise<Equipamento | null> {
+    try {
+      return await this.prisma.equipamento.update({
+        where: { clienteId_codigoInterno: { clienteId, codigoInterno } },
+        data: {
+          tipo: dados.tipo,
+          marca: dados.marca,
+          modelo: dados.modelo,
+          numeroSerie: dados.numeroSerie,
+          atualizadoEm: new Date(),
+          atualizadoPorId: dados.atualizadoPorId,
+        },
+      });
+    } catch (e) {
+      if (codigoPrisma(e) === NAO_ENCONTRADO) return null;
+      throw e;
+    }
+  }
+
+  async excluir(
+    clienteId: number,
+    codigoInterno: number,
+  ): Promise<ResultadoExclusao<Equipamento>> {
+    try {
+      const eq = await this.prisma.equipamento.delete({
+        where: { clienteId_codigoInterno: { clienteId, codigoInterno } },
+      });
+      return { resultado: 'EXCLUIDO', registro: eq };
+    } catch (e) {
+      const codigo = codigoPrisma(e);
+      if (codigo === NAO_ENCONTRADO) return { resultado: 'NAO_ENCONTRADO' };
+      // Hoje não há tabela que referencie o equipamento; quando a OS existir,
+      // a FK com RESTRICT fará o banco recusar e cairá neste caso.
+      if (codigo !== undefined && EM_USO.includes(codigo)) return { resultado: 'EM_USO' };
+      throw e;
+    }
+  }
 }
 
 function paraCliente(c: {
@@ -128,6 +215,8 @@ function paraCliente(c: {
   email: string | null;
   criadoEm: Date;
   criadoPorId: number;
+  atualizadoEm: Date | null;
+  atualizadoPorId: number | null;
 }): Cliente {
   return {
     id: c.id,
@@ -136,5 +225,7 @@ function paraCliente(c: {
     email: c.email,
     criadoEm: c.criadoEm,
     criadoPorId: c.criadoPorId,
+    atualizadoEm: c.atualizadoEm,
+    atualizadoPorId: c.atualizadoPorId,
   };
 }

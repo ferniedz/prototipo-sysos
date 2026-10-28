@@ -44,10 +44,18 @@ describe('CORS e contrato HTTP com Express em memória', () => {
     expect((await injetar(app, { caminho: '/health', cabecalhos: { Origin: 'http://localhost:5173' } })).status).toBe(403);
   });
 
-  it.each([['DELETE', 'authorization'], ['POST', 'authorization,x-custom']])('recusa preflight fora do contrato: %s / %s', async (method, headers) => {
+  it.each([['PATCH', 'authorization'], ['POST', 'authorization,x-custom']])('recusa preflight fora do contrato: %s / %s', async (method, headers) => {
     const { app } = montar();
     const response = await injetar(app, { metodo: 'OPTIONS', caminho: '/api/clientes', cabecalhos: { Origin: 'http://localhost:5173', 'Access-Control-Request-Method': method, 'Access-Control-Request-Headers': headers } });
     expect(response.status).toBe(403);
+  });
+
+  it.each([['PUT', '/api/clientes/1', 'authorization,content-type'], ['DELETE', '/api/clientes/1/equipamentos/1', 'authorization']])('CRUD: permite preflight de %s %s sem exigir JWT', async (method, caminho, headers) => {
+    const { app } = montar();
+    const response = await injetar(app, { metodo: 'OPTIONS', caminho, cabecalhos: { Origin: 'http://localhost:5173', 'Access-Control-Request-Method': method, 'Access-Control-Request-Headers': headers } });
+    expect(response.status).toBe(204);
+    expect(response.headers['access-control-allow-methods']).toBe('GET, POST, PUT, DELETE, OPTIONS');
+    expect(response.headers['access-control-allow-origin']).toBe('http://localhost:5173');
   });
 
   it('valida as origens sem usar coringa', () => {

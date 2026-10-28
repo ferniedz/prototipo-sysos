@@ -81,4 +81,115 @@ suite('Repositórios Prisma + PostgreSQL', () => {
       (await clientes.buscarCandidatosDuplicidade({ nome: 'JOÃO PEREIRA', telefone: null, email: null })).length,
     ).toBe(1);
   });
+
+  // --- CRUD completo (PB18) ---------------------------------------------------
+
+  const dadosEq = { tipo: 'Notebook', marca: null, modelo: null, numeroSerie: null, criadoPorId: 1 };
+
+  it('atualizar cliente: troca os dados, registra quem/quando e mantém id e criação', async () => {
+    const c = await clientes.criar(novo('Maria Antiga'));
+    expect(c.atualizadoEm).toBeNull();
+    expect(c.atualizadoPorId).toBeNull();
+
+    const r = await clientes.atualizar(c.id, {
+      nome: 'Maria Nova', telefone: null, email: 'maria@x.com', atualizadoPorId: 12,
+    });
+
+    expect(r).toMatchObject({
+      id: c.id, nome: 'Maria Nova', telefone: null, email: 'maria@x.com',
+      criadoPorId: 1, atualizadoPorId: 12,
+    });
+    expect(r!.criadoEm.getTime()).toBe(c.criadoEm.getTime());
+    expect(r!.atualizadoEm).toBeInstanceOf(Date);
+  });
+
+  it('atualizar cliente inexistente retorna null (P2025) e não cria registro', async () => {
+    const r = await clientes.atualizar(999, {
+      nome: 'Ninguém', telefone: '42999990000', email: null, atualizadoPorId: 1,
+    });
+    expect(r).toBeNull();
+    expect(await prisma.cliente.count()).toBe(0);
+  });
+
+  it('o CHECK do banco também vale na alteração: cliente não fica sem contato', async () => {
+    const c = await clientes.criar(novo('Com Contato'));
+    await expect(
+      clientes.atualizar(c.id, { nome: 'Com Contato', telefone: null, email: null, atualizadoPorId: 1 }),
+    ).rejects.toBeDefined();
+    expect((await clientes.buscarPorId(c.id))!.telefone).toBe('42999990000');
+  });
+
+  it('duplicidade na alteração ignora o próprio cliente e enxerga os outros', async () => {
+    const a = await clientes.criar(novo('Ana Souza', '42911110000'));
+    const b = await clientes.criar(novo('Bia Lima', '42922220000'));
+    const criterioA = { nome: 'Ana Souza', telefone: '42911110000', email: null };
+
+    expect((await clientes.buscarCandidatosDuplicidade(criterioA)).map((x) => x.id)).toEqual([a.id]);
+    expect(await clientes.buscarCandidatosDuplicidade({ ...criterioA, ignorarId: a.id })).toEqual([]);
+    expect(
+      (await clientes.buscarCandidatosDuplicidade({ ...criterioA, nome: 'bia lima', ignorarId: a.id })).map((x) => x.id),
+    ).toEqual([b.id]);
+  });
+
+  it('excluir cliente: EXCLUIDO sem vínculos; NAO_ENCONTRADO se não existe', async () => {
+    const c = await clientes.criar(novo('Para Excluir'));
+
+    const r = await clientes.excluir(c.id);
+    expect(r).toMatchObject({ resultado: 'EXCLUIDO', registro: { id: c.id, nome: 'Para Excluir' } });
+    expect(await clientes.buscarPorId(c.id)).toBeNull();
+
+    expect(await clientes.excluir(c.id)).toEqual({ resultado: 'NAO_ENCONTRADO' });
+  });
+
+  it('RN20: excluir cliente com equipamento retorna EM_USO (FK RESTRICT) e nada é apagado', async () => {
+    const c = await clientes.criar(novo('Com Equipamento'));
+    await equipamentos.criarParaCliente(c.id, dadosEq);
+
+    expect(await clientes.excluir(c.id)).toEqual({ resultado: 'EM_USO' });
+    expect(await clientes.buscarPorId(c.id)).not.toBeNull();
+    expect(await prisma.equipamento.count()).toBe(1);
+
+    // removido o equipamento, a exclusão passa
+    await equipamentos.excluir(c.id, 1);
+    expect((await clientes.excluir(c.id)).resultado).toBe('EXCLUIDO');
+  });
+
+  it('atualizar equipamento: troca os dados; dono e código ficam; registra quem/quando', async () => {
+    const c = await clientes.criar(novo('Dono'));
+    const eq = (await equipamentos.criarParaCliente(c.id, { ...dadosEq, marca: 'Dell' }))!;
+
+    const r = await equipamentos.atualizar(c.id, eq.codigoInterno, {
+      tipo: 'Tablet', marca: null, modelo: 'A9', numeroSerie: 'S1', atualizadoPorId: 12,
+    });
+
+    expect(r).toMatchObject({
+      clienteId: c.id, codigoInterno: eq.codigoInterno, tipo: 'Tablet',
+      marca: null, modelo: 'A9', numeroSerie: 'S1', criadoPorId: 1, atualizadoPorId: 12,
+    });
+    expect(r!.atualizadoEm).toBeInstanceOf(Date);
+  });
+
+  it('atualizar/excluir equipamento inexistente ou de outro cliente: null / NAO_ENCONTRADO', async () => {
+    const a = await clientes.criar(novo('A', '42911110000'));
+    const b = await clientes.criar(novo('B', '42922220000'));
+    await equipamentos.criarParaCliente(a.id, dadosEq); // código 1 só existe no cliente A
+
+    const alterar = { tipo: 'Invasor', marca: null, modelo: null, numeroSerie: null, atualizadoPorId: 1 };
+    expect(await equipamentos.atualizar(b.id, 1, alterar)).toBeNull();
+    expect(await equipamentos.atualizar(a.id, 77, alterar)).toBeNull();
+    expect(await equipamentos.excluir(b.id, 1)).toEqual({ resultado: 'NAO_ENCONTRADO' });
+    expect((await equipamentos.buscar(a.id, 1))!.tipo).toBe('Notebook');
+  });
+
+  it('excluir equipamento: devolve o excluído e o código NÃO é reaproveitado', async () => {
+    const c = await clientes.criar(novo('Dono'));
+    await equipamentos.criarParaCliente(c.id, dadosEq);
+    await equipamentos.criarParaCliente(c.id, { ...dadosEq, tipo: 'Celular' });
+
+    const r = await equipamentos.excluir(c.id, 1);
+    expect(r).toMatchObject({ resultado: 'EXCLUIDO', registro: { clienteId: c.id, codigoInterno: 1 } });
+    expect((await equipamentos.listarPorCliente(c.id)).map((e) => e.codigoInterno)).toEqual([2]);
+
+    expect((await equipamentos.criarParaCliente(c.id, dadosEq))!.codigoInterno).toBe(3);
+  });
 });

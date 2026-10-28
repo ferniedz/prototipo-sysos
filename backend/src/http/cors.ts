@@ -6,6 +6,9 @@ export const ORIGENS_PADRAO = [
   'http://localhost:4173', 'http://127.0.0.1:4173',
 ];
 
+/** Métodos do contrato da API (PUT e DELETE vieram com o CRUD completo). */
+export const METODOS_PERMITIDOS = ['GET', 'POST', 'PUT', 'DELETE'];
+
 export function configurarOrigens(valor?: string): string[] {
   if (valor === undefined) return [...ORIGENS_PADRAO];
   const origens = valor.split(',').map(origem => origem.trim()).filter(Boolean);
@@ -33,11 +36,11 @@ export function cors(origens: readonly string[]): RequestHandler {
       const metodo = req.get('Access-Control-Request-Method');
       const cabecalhos = (req.get('Access-Control-Request-Headers') ?? '')
         .toLowerCase().split(',').map(valor => valor.trim()).filter(Boolean);
-      if (!metodo || !['GET', 'POST'].includes(metodo) ||
+      if (!metodo || !METODOS_PERMITIDOS.includes(metodo) ||
         cabecalhos.some(nome => !['authorization', 'content-type'].includes(nome))) {
         return next(new AppError(403, 'PREFLIGHT_NAO_PERMITIDO', 'Requisição não permitida.'));
       }
-      res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+      res.setHeader('Access-Control-Allow-Methods', `${METODOS_PERMITIDOS.join(', ')}, OPTIONS`);
       res.setHeader('Access-Control-Allow-Headers', 'Authorization, Content-Type');
       res.setHeader('Access-Control-Max-Age', '600');
       res.status(204).end();
