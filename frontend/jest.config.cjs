@@ -14,6 +14,8 @@ module.exports = {
     'src/components/SearchPanels.tsx',
     'src/components/Details.tsx',
     'src/components/Forms.tsx',
+    'src/components/RecordActions.tsx',
+    'src/components/DeleteConfirmation.tsx',
     'src/components/Modal.tsx',
     'src/App.tsx',
   ],

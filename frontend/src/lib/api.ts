@@ -82,6 +82,13 @@ export function createApi(baseUrl: string, token: string, onUnauthorized?: () =>
       const data = await request<ClientDto>('/clientes', { method: 'POST', body: JSON.stringify({ nome: input.name.trim(), ...(input.phone.trim() ? { telefone: input.phone.trim() } : {}), ...(input.email.trim() ? { email: input.email.trim() } : {}), ...(confirmDuplicate ? { confirmarDuplicidade: true } : {}) }) })
       return clientFromApi(data)
     },
+    async updateClient(clientId: string, input: ClientInput, confirmDuplicate = false) {
+      const data = await request<ClientDto>(`/clientes/${id(clientId)}`, { method: 'PUT', body: JSON.stringify({ nome: input.name.trim(), ...(input.phone.trim() ? { telefone: input.phone.trim() } : {}), ...(input.email.trim() ? { email: input.email.trim() } : {}), ...(confirmDuplicate ? { confirmarDuplicidade: true } : {}) }) })
+      return clientFromApi(data)
+    },
+    async deleteClient(clientId: string) {
+      return clientFromApi(await request<ClientDto>(`/clientes/${id(clientId)}`, { method: 'DELETE' }))
+    },
     async listEquipment(clientId: string, signal?: AbortSignal) {
       const data = await request<{ equipamentos: EquipmentDto[] }>(`/clientes/${id(clientId)}/equipamentos`, { signal })
       return data.equipamentos.map(equipmentFromApi)
@@ -92,6 +99,14 @@ export function createApi(baseUrl: string, token: string, onUnauthorized?: () =>
     async createEquipment(input: EquipmentInput) {
       const data = await request<EquipmentDto>(`/clientes/${id(input.clientId)}/equipamentos`, { method: 'POST', body: JSON.stringify({ tipo: input.type.trim(), ...(input.brand.trim() ? { marca: input.brand.trim() } : {}), ...(input.model.trim() ? { modelo: input.model.trim() } : {}), ...(input.serial.trim() ? { numeroSerie: input.serial.trim() } : {}) }) })
       return equipmentFromApi(data)
+    },
+    async updateEquipment(clientId: string, code: string, input: EquipmentInput) {
+      if (input.clientId !== clientId) throw new ApiError('O cliente vinculado ao equipamento não pode ser alterado.', 400, 'DADOS_INVALIDOS')
+      const data = await request<EquipmentDto>(`/clientes/${id(clientId)}/equipamentos/${id(code)}`, { method: 'PUT', body: JSON.stringify({ tipo: input.type.trim(), ...(input.brand.trim() ? { marca: input.brand.trim() } : {}), ...(input.model.trim() ? { modelo: input.model.trim() } : {}), ...(input.serial.trim() ? { numeroSerie: input.serial.trim() } : {}) }) })
+      return equipmentFromApi(data)
+    },
+    async deleteEquipment(clientId: string, code: string) {
+      return equipmentFromApi(await request<EquipmentDto>(`/clientes/${id(clientId)}/equipamentos/${id(code)}`, { method: 'DELETE' }))
     },
   }
 }

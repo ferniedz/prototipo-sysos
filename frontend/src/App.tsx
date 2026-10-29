@@ -4,11 +4,19 @@ import { Modal } from './components/Modal'
 import { ClientForm, EquipmentForm } from './components/Forms'
 import { ClientSearch, EquipmentPanel } from './components/SearchPanels'
 import { ClientDetails, EquipmentDetails } from './components/Details'
+import { DeleteConfirmation } from './components/DeleteConfirmation'
 import { createApi, tokenProfile } from './lib/api'
 import type { Client, Equipment } from './lib/registry'
 
 type Page = 'clients' | 'equipment'
-type Dialog = { kind: 'client' } | { kind: 'equipment'; client: Client } | { kind: 'client-detail'; client: Client } | { kind: 'equipment-detail'; client: Client; code: string } | { kind: 'session' } | null
+type Dialog =
+  | { kind: 'client' }
+  | { kind: 'client-edit' | 'client-delete' | 'client-detail'; client: Client }
+  | { kind: 'equipment'; client: Client }
+  | { kind: 'equipment-edit' | 'equipment-delete'; client: Client; item: Equipment }
+  | { kind: 'equipment-detail'; client: Client; code: string }
+  | { kind: 'session' }
+  | null
 
 function SessionForm({ onConnect }: { onConnect: (token: string) => void }) {
   const [value, setValue] = useState('')
@@ -36,6 +44,7 @@ export default function App({ apiBaseUrl = 'http://localhost:3000/api' }: { apiB
   const [dialog, setDialog] = useState<Dialog>(null)
   const [busy, setBusy] = useState(false)
   const [revision, setRevision] = useState(0)
+  const [clientRevision, setClientRevision] = useState(0)
   const [notice, setNotice] = useState('')
   const [sessionError, setSessionError] = useState('')
   const unauthorized = useCallback(() => {
@@ -56,7 +65,33 @@ export default function App({ apiBaseUrl = 'http://localhost:3000/api' }: { apiB
     setNotice(`Equipamento #${item.code} cadastrado para o cliente #${item.clientId}.`)
     setDialog(null); setRevision(value => value + 1)
   }
-  function closeDialog() { if (!busy) setDialog(null) }
+  function clientUpdated(client: Client) {
+    setNotice(`Cliente ${client.name} atualizado com sucesso.`)
+    setSelectedClient(previous => previous?.id === client.id ? client : previous)
+    setClientRevision(value => value + 1)
+    setDialog({ kind: 'client-detail', client })
+  }
+  function clientDeleted(client: Client) {
+    setNotice(`Cliente ${client.name} excluído com sucesso.`)
+    if (selectedClient?.id === client.id) { setSelectedClient(null); setPage('clients') }
+    setClientRevision(value => value + 1); setDialog(null)
+  }
+  function equipmentUpdated(item: Equipment) {
+    setNotice(`Equipamento #${item.code} atualizado com sucesso.`)
+    setRevision(value => value + 1)
+    if (selectedClient) setDialog({ kind: 'equipment-detail', client: selectedClient, code: item.code })
+    else setDialog(null)
+  }
+  function equipmentDeleted(item: Equipment) {
+    setNotice(`Equipamento #${item.code} excluído do cliente #${item.clientId}.`)
+    setRevision(value => value + 1); setDialog(null)
+  }
+  function closeDialog() {
+    if (busy) return
+    if (dialog?.kind === 'client-edit' || dialog?.kind === 'client-delete') setDialog({ kind: 'client-detail', client: dialog.client })
+    else if (dialog?.kind === 'equipment-edit' || dialog?.kind === 'equipment-delete') setDialog({ kind: 'equipment-detail', client: dialog.client, code: dialog.item.code })
+    else setDialog(null)
+  }
   function connect(nextToken: string) {
     setToken(nextToken); setSessionVersion(value => value + 1); setSelectedClient(null); setDialog(null); setSessionError(''); setNotice('')
   }
@@ -89,7 +124,7 @@ export default function App({ apiBaseUrl = 'http://localhost:3000/api' }: { apiB
         {sessionError && <div className="error-notice" role="alert">{sessionError}</div>}
         {!token ? <section className="registry-panel"><div className="empty-state"><UserRound size={32} /><h2>Informe o acesso à API</h2><p>Use um token de atendente ou técnico para buscar clientes e equipamentos.</p><button className="button primary" onClick={() => setDialog({ kind: 'session' })}>Informar token</button></div></section> :
           <div key={sessionVersion}>
-            {isClients || !selectedClient ? <ClientSearch key={page} api={api} selecting={!isClients} canCreate={canCreate} onSelect={selectClient} onDetails={client => setDialog({ kind: 'client-detail', client })} onNewClient={() => setDialog({ kind: 'client' })} /> :
+            {isClients || !selectedClient ? <ClientSearch key={page} revision={clientRevision} api={api} selecting={!isClients} canCreate={canCreate} onSelect={selectClient} onDetails={client => setDialog({ kind: 'client-detail', client })} onNewClient={() => setDialog({ kind: 'client' })} /> :
               <EquipmentPanel key={`${selectedClient.id}:${revision}`} api={api} client={selectedClient} canCreate={canCreate} revision={revision} onNew={() => setDialog({ kind: 'equipment', client: selectedClient })} onDetails={item => setDialog({ kind: 'equipment-detail', client: selectedClient, code: item.code })} onChangeClient={() => setSelectedClient(null)} />}
           </div>}
       </main>
@@ -98,7 +133,11 @@ export default function App({ apiBaseUrl = 'http://localhost:3000/api' }: { apiB
     {dialog?.kind === 'session' && <Modal title="Acesso à API" onClose={closeDialog}><SessionForm onConnect={connect} /></Modal>}
     {dialog?.kind === 'client' && <Modal title="Novo cliente" busy={busy} onClose={closeDialog}><ClientForm onSave={api.createClient} onCreated={clientCreated} onCancel={closeDialog} onBusyChange={setBusy} /></Modal>}
     {dialog?.kind === 'equipment' && <Modal title="Novo equipamento" busy={busy} onClose={closeDialog}><EquipmentForm client={dialog.client} onSave={api.createEquipment} onCreated={equipmentCreated} onCancel={closeDialog} onBusyChange={setBusy} /></Modal>}
-    {dialog?.kind === 'client-detail' && <Modal title={dialog.client.name} subtitle={`Cliente ${dialog.client.code}`} onClose={closeDialog}><ClientDetails key={dialog.client.id} api={api} client={dialog.client} onEquipment={selectClient} /></Modal>}
-    {dialog?.kind === 'equipment-detail' && <Modal title={`Equipamento #${dialog.code}`} subtitle={`${dialog.client.name} · cliente ${dialog.client.code}`} onClose={closeDialog}><EquipmentDetails key={`${dialog.client.id}:${dialog.code}`} api={api} client={dialog.client} code={dialog.code} /></Modal>}
+    {dialog?.kind === 'client-edit' && <Modal title="Editar cliente" subtitle={`Identificador ${dialog.client.code}`} busy={busy} onClose={closeDialog}><ClientForm key={dialog.client.id} initialClient={dialog.client} onSave={(input, confirm) => api.updateClient(dialog.client.id, input, confirm)} onCreated={clientUpdated} onCancel={closeDialog} onBusyChange={setBusy} /></Modal>}
+    {dialog?.kind === 'equipment-edit' && <Modal title="Editar equipamento" subtitle={`${dialog.client.name} · código #${dialog.item.code}`} busy={busy} onClose={closeDialog}><EquipmentForm key={dialog.item.id} client={dialog.client} initialEquipment={dialog.item} onSave={input => api.updateEquipment(dialog.client.id, dialog.item.code, input)} onCreated={equipmentUpdated} onCancel={closeDialog} onBusyChange={setBusy} /></Modal>}
+    {dialog?.kind === 'client-delete' && <Modal title="Excluir cliente" busy={busy} onClose={closeDialog}><DeleteConfirmation resource="cliente" description={`${dialog.client.name} (${dialog.client.code})`} onDelete={() => api.deleteClient(dialog.client.id)} onDeleted={() => clientDeleted(dialog.client)} onCancel={closeDialog} onBusyChange={setBusy} /></Modal>}
+    {dialog?.kind === 'equipment-delete' && <Modal title="Excluir equipamento" busy={busy} onClose={closeDialog}><DeleteConfirmation resource="equipamento" description={`#${dialog.item.code} · ${dialog.item.type} · cliente ${dialog.client.name} (${dialog.client.code})`} onDelete={() => api.deleteEquipment(dialog.client.id, dialog.item.code)} onDeleted={() => equipmentDeleted(dialog.item)} onCancel={closeDialog} onBusyChange={setBusy} /></Modal>}
+    {dialog?.kind === 'client-detail' && <Modal title={dialog.client.name} subtitle={`Cliente ${dialog.client.code}`} onClose={closeDialog}><ClientDetails key={dialog.client.id} api={api} client={dialog.client} onEquipment={selectClient} canManage={canCreate} onEdit={client => setDialog({ kind: 'client-edit', client })} onDelete={client => setDialog({ kind: 'client-delete', client })} /></Modal>}
+    {dialog?.kind === 'equipment-detail' && <Modal title={`Equipamento #${dialog.code}`} subtitle={`${dialog.client.name} · cliente ${dialog.client.code}`} onClose={closeDialog}><EquipmentDetails key={`${dialog.client.id}:${dialog.code}`} api={api} client={dialog.client} code={dialog.code} canManage={canCreate} onEdit={item => setDialog({ kind: 'equipment-edit', client: dialog.client, item })} onDelete={item => setDialog({ kind: 'equipment-delete', client: dialog.client, item })} /></Modal>}
   </div>
 }

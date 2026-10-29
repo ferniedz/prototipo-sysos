@@ -2,12 +2,12 @@
 
 Projeto acadêmico de um sistema de gerenciamento de ordens de serviço para assistências técnicas de pequeno e médio porte, desenvolvido no contexto da disciplina de Gestão de Projetos.
 
-O protótipo atual implementa **cadastro e consulta de clientes e equipamentos**, com frontend integrado a uma API REST e persistência em PostgreSQL. O gerenciamento das ordens de serviço faz parte da evolução prevista do produto e ainda não está implementado.
+O protótipo atual implementa **CRUD de clientes e equipamentos (cadastro, consulta, alteração e exclusão)**, com frontend integrado a uma API REST e persistência em PostgreSQL. O gerenciamento das ordens de serviço faz parte da evolução prevista do produto e ainda não está implementado.
 
 ## Documentação
 
 - [Backend](backend/README.md): configuração da API, autenticação, endpoints, testes e deploy.
-- [Frontend](frontend/README.md): configuração da interface, fluxos de consulta e cadastro e testes.
+- [Frontend](frontend/README.md): configuração da interface, fluxos de CRUD e testes.
 - [Modelo de dados](backend/docs/MODELO_DADOS.md).
 - [Rastreabilidade dos requisitos](backend/docs/RASTREABILIDADE.md).
 - [Registro de uso de IA do backend](backend/docs/REGISTRO_USO_IA.md).
@@ -20,6 +20,8 @@ O protótipo atual implementa **cadastro e consulta de clientes e equipamentos**
 - Confirmação explícita de possíveis duplicidades, sem mesclar cadastros automaticamente.
 - Cadastro de equipamentos vinculados a um cliente, com tipo obrigatório e marca, modelo e número de série opcionais.
 - Consulta dos equipamentos de um cliente e busca por código interno nesse contexto.
+- Edição de clientes e equipamentos, preservando seus identificadores e vínculos.
+- Exclusão com confirmação explícita e tratamento das restrições de vínculo do backend.
 - Acesso à API com JWT e permissões para atendentes e técnicos.
 - Interface em português voltada a computadores.
 
@@ -133,7 +135,7 @@ Na interface, clique em **Conectar à API**, cole o token e escolha **Usar token
 
 | Perfil | Operações permitidas |
 |---|---|
-| `ATENDENTE` | Cadastro e consulta de clientes e equipamentos |
+| `ATENDENTE` | Cadastro, consulta, alteração e exclusão de clientes e equipamentos |
 | `TECNICO` | Consulta de clientes e equipamentos |
 
 Para testar o perfil de técnico:
