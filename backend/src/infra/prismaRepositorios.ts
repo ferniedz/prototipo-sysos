@@ -1,4 +1,4 @@
-import { Prisma, PrismaClient } from '@prisma/client';
+import { Prisma, PrismaClient, Usuario } from "@prisma/client";
 import {
   AtualizacaoCliente,
   AtualizacaoEquipamento,
@@ -9,18 +9,20 @@ import {
   NovoCliente,
   NovoEquipamento,
   ResultadoExclusao,
-} from '../dominio/tipos';
+} from "../dominio/tipos";
 
 /** Única camada que conhece o Prisma/PostgreSQL. */
 
 function codigoPrisma(e: unknown): string | undefined {
-  return typeof e === 'object' && e !== null ? (e as { code?: string }).code : undefined;
+  return typeof e === "object" && e !== null
+    ? (e as { code?: string }).code
+    : undefined;
 }
 
 /** P2025: registro não existe. */
-const NAO_ENCONTRADO = 'P2025';
+const NAO_ENCONTRADO = "P2025";
 /** P2003/P2014: o banco recusou por haver registros dependentes (RESTRICT). */
-const EM_USO = ['P2003', 'P2014'];
+const EM_USO = ["P2003", "P2014"];
 
 export class ClientePrismaRepositorio implements ClienteRepositorio {
   constructor(private readonly prisma: PrismaClient) {}
@@ -43,16 +45,16 @@ export class ClientePrismaRepositorio implements ClienteRepositorio {
   }
 
   async buscarPorTexto(termo: string, limite: number): Promise<Cliente[]> {
-    const digitos = termo.replace(/\D/g, '');
+    const digitos = termo.replace(/\D/g, "");
     const lista = await this.prisma.cliente.findMany({
       where: {
         OR: [
-          { nome: { contains: termo, mode: 'insensitive' } },
+          { nome: { contains: termo, mode: "insensitive" } },
           { email: { contains: termo.toLowerCase() } },
           ...(digitos.length >= 4 ? [{ telefone: { contains: digitos } }] : []),
         ],
       },
-      orderBy: [{ nome: 'asc' }, { id: 'asc' }],
+      orderBy: [{ nome: "asc" }, { id: "asc" }],
       take: limite,
     });
     return lista.map(paraCliente);
@@ -67,19 +69,24 @@ export class ClientePrismaRepositorio implements ClienteRepositorio {
     const lista = await this.prisma.cliente.findMany({
       where: {
         OR: [
-          { nome: { equals: criterio.nome, mode: 'insensitive' } },
+          { nome: { equals: criterio.nome, mode: "insensitive" } },
           ...(criterio.telefone ? [{ telefone: criterio.telefone }] : []),
           ...(criterio.email ? [{ email: criterio.email }] : []),
         ],
-        ...(criterio.ignorarId !== undefined ? { NOT: { id: criterio.ignorarId } } : {}),
+        ...(criterio.ignorarId !== undefined
+          ? { NOT: { id: criterio.ignorarId } }
+          : {}),
       },
-      orderBy: { id: 'asc' },
+      orderBy: { id: "asc" },
       take: 10,
     });
     return lista.map(paraCliente);
   }
 
-  async atualizar(id: number, dados: AtualizacaoCliente): Promise<Cliente | null> {
+  async atualizar(
+    id: number,
+    dados: AtualizacaoCliente,
+  ): Promise<Cliente | null> {
     try {
       const c = await this.prisma.cliente.update({
         where: { id },
@@ -101,16 +108,17 @@ export class ClientePrismaRepositorio implements ClienteRepositorio {
   async excluir(id: number): Promise<ResultadoExclusao<Cliente>> {
     try {
       const c = await this.prisma.cliente.delete({ where: { id } });
-      return { resultado: 'EXCLUIDO', registro: paraCliente(c) };
+      return { resultado: "EXCLUIDO", registro: paraCliente(c) };
     } catch (e: any) {
       // O IF vai aqui, dentro do catch do método EXCLUIR
-      if (e.message && e.message.includes('RESTRICT')) {
-        return { resultado: 'EM_USO' };
+      if (e.message && e.message.includes("RESTRICT")) {
+        return { resultado: "EM_USO" };
       }
-      
+
       const codigo = codigoPrisma(e);
-      if (codigo === 'P2025') return { resultado: 'NAO_ENCONTRADO' };
-      if (codigo === 'P2003' || codigo === 'P2014') return { resultado: 'EM_USO' };
+      if (codigo === "P2025") return { resultado: "NAO_ENCONTRADO" };
+      if (codigo === "P2003" || codigo === "P2014")
+        return { resultado: "EM_USO" };
       throw e;
     }
   }
@@ -128,28 +136,34 @@ export class EquipamentoPrismaRepositorio implements EquipamentoRepositorio {
     dados: NovoEquipamento,
   ): Promise<Equipamento | null> {
     try {
-      const criado = await this.prisma.$transaction(async (tx: Prisma.TransactionClient) => {
-        const cliente = await tx.cliente.update({
-          where: { id: clienteId },
-          data: { proximoCodigoEquipamento: { increment: 1 } },
-          select: { proximoCodigoEquipamento: true },
-        });
-        return tx.equipamento.create({
-          data: {
-            clienteId,
-            codigoInterno: cliente.proximoCodigoEquipamento - 1,
-            tipo: dados.tipo,
-            marca: dados.marca,
-            modelo: dados.modelo,
-            numeroSerie: dados.numeroSerie,
-            criadoPorId: dados.criadoPorId,
-          },
-        });
-      });
+      const criado = await this.prisma.$transaction(
+        async (tx: Prisma.TransactionClient) => {
+          const cliente = await tx.cliente.update({
+            where: { id: clienteId },
+            data: { proximoCodigoEquipamento: { increment: 1 } },
+            select: { proximoCodigoEquipamento: true },
+          });
+          return tx.equipamento.create({
+            data: {
+              clienteId,
+              codigoInterno: cliente.proximoCodigoEquipamento - 1,
+              tipo: dados.tipo,
+              marca: dados.marca,
+              modelo: dados.modelo,
+              numeroSerie: dados.numeroSerie,
+              criadoPorId: dados.criadoPorId,
+            },
+          });
+        },
+      );
       return criado;
     } catch (e) {
       // P2025: registro a atualizar não existe (cliente inexistente)
-      if (typeof e === 'object' && e !== null && (e as { code?: string }).code === 'P2025') {
+      if (
+        typeof e === "object" &&
+        e !== null &&
+        (e as { code?: string }).code === "P2025"
+      ) {
         return null;
       }
       throw e;
@@ -159,11 +173,14 @@ export class EquipamentoPrismaRepositorio implements EquipamentoRepositorio {
   async listarPorCliente(clienteId: number): Promise<Equipamento[]> {
     return this.prisma.equipamento.findMany({
       where: { clienteId },
-      orderBy: { codigoInterno: 'asc' },
+      orderBy: { codigoInterno: "asc" },
     });
   }
 
-  async buscar(clienteId: number, codigoInterno: number): Promise<Equipamento | null> {
+  async buscar(
+    clienteId: number,
+    codigoInterno: number,
+  ): Promise<Equipamento | null> {
     return this.prisma.equipamento.findUnique({
       where: { clienteId_codigoInterno: { clienteId, codigoInterno } },
     });
@@ -200,13 +217,14 @@ export class EquipamentoPrismaRepositorio implements EquipamentoRepositorio {
       const eq = await this.prisma.equipamento.delete({
         where: { clienteId_codigoInterno: { clienteId, codigoInterno } },
       });
-      return { resultado: 'EXCLUIDO', registro: eq };
+      return { resultado: "EXCLUIDO", registro: eq };
     } catch (e) {
       const codigo = codigoPrisma(e);
-      if (codigo === NAO_ENCONTRADO) return { resultado: 'NAO_ENCONTRADO' };
+      if (codigo === NAO_ENCONTRADO) return { resultado: "NAO_ENCONTRADO" };
       // Hoje não há tabela que referencie o equipamento; quando a OS existir,
       // a FK com RESTRICT fará o banco recusar e cairá neste caso.
-      if (codigo !== undefined && EM_USO.includes(codigo)) return { resultado: 'EM_USO' };
+      if (codigo !== undefined && EM_USO.includes(codigo))
+        return { resultado: "EM_USO" };
       throw e;
     }
   }
@@ -232,4 +250,51 @@ function paraCliente(c: {
     atualizadoEm: c.atualizadoEm,
     atualizadoPorId: c.atualizadoPorId,
   };
+}
+
+export type NovoUsuario = Omit<Usuario, "id" | "criadoEm" | "ativo">;
+export type UsuarioAtualizado = Partial<NovoUsuario> & { ativo?: boolean };
+
+export class UsuarioPrismaRepositorio {
+  constructor(private readonly prisma: PrismaClient) {}
+
+  async criar(dados: NovoUsuario): Promise<Usuario> {
+    return this.prisma.usuario.create({ data: dados });
+  }
+
+  async buscarPorId(id: number): Promise<Usuario | null> {
+    return this.prisma.usuario.findUnique({ where: { id } });
+  }
+
+  async listarTodos(): Promise<Usuario[]> {
+    return this.prisma.usuario.findMany({ orderBy: { nome: "asc" } });
+  }
+
+  async atualizar(
+    id: number,
+    dados: UsuarioAtualizado,
+  ): Promise<Usuario | null> {
+    try {
+      return await this.prisma.usuario.update({
+        where: { id },
+        data: dados,
+      });
+    } catch (e: any) {
+      if (e.code === "P2025") return null;
+      throw e;
+    }
+  }
+
+  async excluir(id: number): Promise<boolean> {
+    try {
+      await this.prisma.usuario.delete({ where: { id } });
+      return true;
+    } catch (e: any) {
+      if (e.code === "P2025") return false;
+      if (e.message && e.message.includes("RESTRICT")) {
+        throw new Error("EM_USO");
+      }
+      throw e;
+    }
+  }
 }

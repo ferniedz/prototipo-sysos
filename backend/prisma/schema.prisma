@@ -64,3 +64,20 @@ model Equipamento {
 
   @@id([clienteId, codigoInterno])
 }
+
+enum PerfilUsuario {
+  ATENDENTE
+  TECNICO
+}
+
+model Usuario {
+  id       Int           @id @default(autoincrement())
+  nome     String
+  email    String        @unique
+  senha    String // Em um cenário real, deve ser salva com hash (ex: bcrypt)
+  perfil   PerfilUsuario
+  ativo    Boolean       @default(true)
+  criadoEm DateTime      @default(now())
+
+  // Relacionamentos futuros com a OS podem ser adicionados aqui
+}

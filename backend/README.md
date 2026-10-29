@@ -4,7 +4,7 @@ API REST em **TypeScript / Node.js + Express**, com **Prisma + PostgreSQL**,
 testes em **Jest** e hospedagem prevista no **Render** (stack definida nos
 slides do projeto).
 
-> **Escopo:** CRUD completo de **clientes** e **equipamentos** — cadastro,
+> **Escopo:** CRUD completo de **clientes**, **equipamentos** e **usuários (funcionários)** — cadastro,
 > consulta, alteração e exclusão (PB02, PB03 e PB18). Equipamento é entidade
 > fraca: pertence obrigatoriamente a um cliente. Veja `docs/` para o modelo de
 > dados, a rastreabilidade e o registro de uso de IA.
@@ -71,7 +71,7 @@ npm run test:int    # integração com PostgreSQL real
 ```
 
 > **Atenção:** `npm run test:int` lê a `DATABASE_URL` do `.env` e executa
-> `TRUNCATE` nas tabelas `Cliente` e `Equipamento`, **apagando os dados
+> `TRUNCATE` nas tabelas `Cliente`, `Equipamento` e `Usuario`, **apagando os dados
 > existentes**. Use um banco de testes.
 
 Sem `DATABASE_URL` carregada, a suíte de integração é ignorada (aparece como
@@ -116,6 +116,11 @@ Matriz de acesso **proposta**: escrita (`POST`, `PUT` e `DELETE`) só para
 | `GET /api/clientes/:clienteId/equipamentos/:codigoInterno` | ambos | Consulta um equipamento |
 | `PUT /api/clientes/:clienteId/equipamentos/:codigoInterno` | atendente | Altera o equipamento (mesmo corpo do `POST`). Dono e código interno não mudam |
 | `DELETE /api/clientes/:clienteId/equipamentos/:codigoInterno` | atendente | Exclui o equipamento **sem OS vinculada**; com vínculos responde `409 EQUIPAMENTO_COM_VINCULOS` |
+| `POST /api/usuarios` | atendente | Cadastra usuário (nome, email, senha, perfil). Responde `409` para e-mail duplicado |
+| `GET /api/usuarios` | ambos | Lista todos os usuários cadastrados |
+| `GET /api/usuarios/:id` | ambos | Consulta um usuário específico |
+| `PUT /api/usuarios/:id` | atendente | Altera os dados e/ou perfil do usuário |
+| `DELETE /api/usuarios/:id` | atendente | Exclui o usuário do sistema |
 
 `GET /health` não exige login e não expõe dados.
 

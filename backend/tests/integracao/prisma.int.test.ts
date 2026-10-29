@@ -8,6 +8,7 @@ import { PrismaClient } from '@prisma/client';
 import {
   ClientePrismaRepositorio,
   EquipamentoPrismaRepositorio,
+  UsuarioPrismaRepositorio,
 } from '../../src/infra/prismaRepositorios';
 
 const temBanco = !!process.env['DATABASE_URL'];
@@ -19,16 +20,19 @@ suite('Repositórios Prisma + PostgreSQL', () => {
   let prisma: PrismaClient;
   let clientes: ClientePrismaRepositorio;
   let equipamentos: EquipamentoPrismaRepositorio;
+  let usuarios: UsuarioPrismaRepositorio;
 
   beforeAll(() => {
     prisma = new PrismaClient();
     clientes = new ClientePrismaRepositorio(prisma);
     equipamentos = new EquipamentoPrismaRepositorio(prisma);
+    usuarios = new UsuarioPrismaRepositorio(prisma);
   });
 
   beforeEach(async () => {
-    await prisma.$executeRawUnsafe('TRUNCATE "Equipamento", "Cliente" RESTART IDENTITY CASCADE');
+    await prisma.$executeRawUnsafe('TRUNCATE "Equipamento", "Cliente", "Usuario" RESTART IDENTITY CASCADE');
   });
+
   afterAll(async () => {
     await prisma.$disconnect();
   });
@@ -38,6 +42,13 @@ suite('Repositórios Prisma + PostgreSQL', () => {
     telefone,
     email: null,
     criadoPorId: 1,
+  });
+
+  const novoUsuario = (nome: string, email: string) => ({
+    nome,
+    email,
+    senha: 'senha-segura',
+    perfil: 'ATENDENTE' as const,
   });
 
   it('gera codigoInterno por cliente, sem repetir, mesmo com cadastros simultâneos', async () => {
@@ -191,5 +202,37 @@ suite('Repositórios Prisma + PostgreSQL', () => {
     expect((await equipamentos.listarPorCliente(c.id)).map((e) => e.codigoInterno)).toEqual([2]);
 
     expect((await equipamentos.criarParaCliente(c.id, dadosEq))!.codigoInterno).toBe(3);
+  });
+
+  // --- CRUD Usuários (Atendentes, Técnicos e Gerentes) ---------------------
+
+  it('cria usuário, busca por id, lista ordenado e impede e-mail duplicado (P2002)', async () => {
+    const u1 = await usuarios.criar(novoUsuario('Atendente Um', 'atendente1@sysos.com'));
+    expect(u1.id).toBeDefined();
+    expect(u1.perfil).toBe('ATENDENTE');
+
+    const busca = await usuarios.buscarPorId(u1.id);
+    expect(busca).toMatchObject({ id: u1.id, nome: 'Atendente Um', email: 'atendente1@sysos.com' });
+
+    await usuarios.criar({ ...novoUsuario('Técnico Dois', 'tecnico2@sysos.com'), perfil: 'TECNICO' });
+    const todos = await usuarios.listarTodos();
+    expect(todos.map((u) => u.nome)).toEqual(['Atendente Um', 'Técnico Dois']);
+
+    await expect(usuarios.criar(novoUsuario('Duplicado', 'atendente1@sysos.com'))).rejects.toBeDefined();
+  });
+
+  it('atualizar e excluir usuário: atualiza campos, trata inexistente (null / false) e remove do banco', async () => {
+  const u = await usuarios.criar(novoUsuario('Nome Antigo', 'antigo@sysos.com'));
+
+  const atualizado = await usuarios.atualizar(u.id, { nome: 'Nome Novo', perfil: 'TECNICO' });
+  expect(atualizado).toMatchObject({ id: u.id, nome: 'Nome Novo', perfil: 'TECNICO' });
+
+    expect(await usuarios.atualizar(999, { nome: 'Inexistente' })).toBeNull();
+
+    const excluido = await usuarios.excluir(u.id);
+    expect(excluido).toBe(true);
+    expect(await usuarios.buscarPorId(u.id)).toBeNull();
+
+    expect(await usuarios.excluir(999)).toBe(false);
   });
 });

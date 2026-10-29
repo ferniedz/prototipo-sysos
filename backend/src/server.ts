@@ -3,8 +3,9 @@ import { carregarConfig } from './config';
 import { criarApp } from './http/app';
 import {
   ClientePrismaRepositorio,
-  EquipamentoPrismaRepositorio,
+  EquipamentoPrismaRepositorio
 } from './infra/prismaRepositorios';
+import { constroiRotasUsuarios } from './api/usuariosRoutes';
 
 const config = carregarConfig();
 const prisma = new PrismaClient();
@@ -15,6 +16,8 @@ const app = criarApp({
   jwtSegredo: config.jwtSegredo,
   origensCors: config.origensCors,
 });
+
+app.use('/api/usuarios', constroiRotasUsuarios(prisma));
 
 const servidor = app.listen(config.porta, () => {
   console.log(`SysOS backend ouvindo na porta ${config.porta}`);

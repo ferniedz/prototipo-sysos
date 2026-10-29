@@ -2,7 +2,7 @@
 
 Projeto acadêmico de um sistema de gerenciamento de ordens de serviço para assistências técnicas de pequeno e médio porte, desenvolvido no contexto da disciplina de Gestão de Projetos.
 
-O protótipo atual implementa **cadastro e consulta de clientes e equipamentos**, com frontend integrado a uma API REST e persistência em PostgreSQL. O gerenciamento das ordens de serviço faz parte da evolução prevista do produto e ainda não está implementado.
+O protótipo atual implementa **cadastro e consulta de clientes, equipamentos e usuários (funcionários)**, com frontend integrado a uma API REST e persistência em PostgreSQL. O gerenciamento das ordens de serviço faz parte da evolução prevista do produto e ainda não está implementado.
 
 ## Documentação
 
@@ -22,6 +22,7 @@ O protótipo atual implementa **cadastro e consulta de clientes e equipamentos**
 - Consulta dos equipamentos de um cliente e busca por código interno nesse contexto.
 - Acesso à API com JWT e permissões para atendentes e técnicos.
 - Interface em português voltada a computadores.
+- Cadastro e gerenciamento de usuários (funcionários), limitados aos perfis de Atendente e Técnico.
 
 Não há listagem global de clientes ou equipamentos. Primeiro o funcionário busca um cliente; depois, seleciona-o para consultar ou cadastrar seus equipamentos. Um equipamento é identificado pelo par **cliente + código interno**, portanto clientes diferentes podem ter equipamentos com o mesmo código.
 
