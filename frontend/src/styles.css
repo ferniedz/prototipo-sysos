@@ -903,7 +903,7 @@ tbody tr:hover {
   margin-left:90px
 }
 .required {
-  color:#ab744e;
+  color:#c0392b;
   font-size:11px
 }
 .field:has(#equipment-client)>.required {
