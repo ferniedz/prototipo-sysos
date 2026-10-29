@@ -102,15 +102,19 @@ export class ClientePrismaRepositorio implements ClienteRepositorio {
     try {
       const c = await this.prisma.cliente.delete({ where: { id } });
       return { resultado: 'EXCLUIDO', registro: paraCliente(c) };
-    } catch (e) {
+    } catch (e: any) {
+      // O IF vai aqui, dentro do catch do método EXCLUIR
+      if (e.message && e.message.includes('RESTRICT')) {
+        return { resultado: 'EM_USO' };
+      }
+      
       const codigo = codigoPrisma(e);
-      if (codigo === NAO_ENCONTRADO) return { resultado: 'NAO_ENCONTRADO' };
-      if (codigo !== undefined && EM_USO.includes(codigo)) return { resultado: 'EM_USO' };
+      if (codigo === 'P2025') return { resultado: 'NAO_ENCONTRADO' };
+      if (codigo === 'P2003' || codigo === 'P2014') return { resultado: 'EM_USO' };
       throw e;
     }
   }
 }
-
 export class EquipamentoPrismaRepositorio implements EquipamentoRepositorio {
   constructor(private readonly prisma: PrismaClient) {}
 
