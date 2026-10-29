@@ -903,7 +903,7 @@ tbody tr:hover {
   margin-left:90px
 }
 .required {
-  color:#ab744e;
+  color:#c0392b;
   font-size:11px
 }
 .field:has(#equipment-client)>.required {
@@ -1351,3 +1351,12 @@ tbody tr:hover {
 .client-search-table th:nth-child(2) { width: 35%; }
 .client-search-table th:last-child { width: 25%; }
 .registry-panel .empty-state { gap: 16px; }
+
+.record-actions { display: flex; gap: 10px; margin-bottom: 22px; }
+.button.danger { background: #b5332c; color: white; border-color: #b5332c; }
+.button.danger:hover:not(:disabled) { background: #942820; }
+.button.danger-outline { background: white; color: #b5332c; border-color: #dfb8b2; }
+.button.danger-outline:hover:not(:disabled) { background: #fff1ed; }
+.delete-confirmation p { margin-bottom: 16px; font-size: 13px; line-height: 1.8; }
+.delete-confirmation .error-notice { margin-top: 18px; }
+.modal-footer > .delete-confirmation-actions { margin-left: auto; }

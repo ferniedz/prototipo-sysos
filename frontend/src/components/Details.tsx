@@ -1,9 +1,13 @@
 import { useEffect, useState } from 'react'
 import { Monitor } from './Icons'
+import { RecordActions } from './RecordActions'
 import { errorMessage, type Api } from '../lib/api'
 import { displayDate, type Client, type Equipment } from '../lib/registry'
 
-export function ClientDetails({ api, client, onEquipment }: { api: Api; client: Client; onEquipment: (client: Client) => void }) {
+export function ClientDetails({ api, client, onEquipment, canManage = false, onEdit = () => {}, onDelete = () => {} }: {
+  api: Api; client: Client; onEquipment: (client: Client) => void
+  canManage?: boolean; onEdit?: (client: Client) => void; onDelete?: (client: Client) => void
+}) {
   const [state, setState] = useState<{ client?: Client; error?: string }>({})
   useEffect(() => {
     const controller = new AbortController()
@@ -19,11 +23,15 @@ export function ClientDetails({ api, client, onEquipment }: { api: Api; client: 
     <dl className="detail-grid"><div><dt>Identificador</dt><dd>{data.code}</dd></div><div><dt>Cadastrado em</dt><dd>{displayDate(data.createdAt)}</dd></div>
       <div><dt>Telefone</dt><dd>{data.phone || 'Não informado'}</dd></div><div><dt>E-mail</dt><dd>{data.email || 'Não informado'}</dd></div>
     </dl>
+    <RecordActions canManage={canManage} onEdit={() => onEdit(data)} onDelete={() => onDelete(data)} />
     <button className="button secondary" onClick={() => onEquipment(data)}><Monitor size={17} />Consultar equipamentos deste cliente</button>
   </div>
 }
 
-export function EquipmentDetails({ api, client, code }: { api: Api; client: Client; code: string }) {
+export function EquipmentDetails({ api, client, code, canManage = false, onEdit = () => {}, onDelete = () => {} }: {
+  api: Api; client: Client; code: string
+  canManage?: boolean; onEdit?: (item: Equipment) => void; onDelete?: (item: Equipment) => void
+}) {
   const [state, setState] = useState<{ item?: Equipment; error?: string }>({})
   useEffect(() => {
     const controller = new AbortController()
@@ -40,5 +48,5 @@ export function EquipmentDetails({ api, client, code }: { api: Api; client: Clie
     <div><dt>Tipo</dt><dd>{item.type}</dd></div><div><dt>Marca</dt><dd>{item.brand || 'Não informada'}</dd></div>
     <div><dt>Modelo</dt><dd>{item.model || 'Não informado'}</dd></div><div><dt>Número de série</dt><dd>{item.serial || 'Não informado'}</dd></div>
     <div><dt>Cadastrado em</dt><dd>{displayDate(item.createdAt)}</dd></div>
-  </dl></div>
+  </dl><RecordActions canManage={canManage} onEdit={() => onEdit(item)} onDelete={() => onDelete(item)} /></div>
 }

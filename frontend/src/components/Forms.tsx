@@ -7,13 +7,14 @@ export function FieldError({ id, error }: { id: string; error?: string }) {
   return error ? <span className="field-error" id={id}>{error}</span> : null
 }
 
-export function ClientForm({ onSave, onCreated, onCancel, onBusyChange }: {
+export function ClientForm({ onSave, onCreated, onCancel, onBusyChange, initialClient }: {
+  initialClient?: Client
   onSave: (input: ClientInput, confirmDuplicate: boolean) => Promise<Client>
   onCreated: (client: Client) => void
   onCancel: () => void
   onBusyChange?: (busy: boolean) => void
 }) {
-  const [input, setInput] = useState<ClientInput>({ name: '', phone: '', email: '' })
+  const [input, setInput] = useState<ClientInput>({ name: initialClient?.name ?? '', phone: formatPhone(initialClient?.phone ?? ''), email: initialClient?.email ?? '' })
   const [errors, setErrors] = useState<Errors>({})
   const [duplicateConfirmed, setDuplicateConfirmed] = useState(false)
   const [duplicates, setDuplicates] = useState<Client[]>([])
@@ -54,7 +55,7 @@ export function ClientForm({ onSave, onCreated, onCancel, onBusyChange }: {
           <input id="client-name" autoFocus autoComplete="name" maxLength={150} placeholder="Ex.: Ana Carolina Souza" value={input.name} onChange={e => change('name', e.target.value)} aria-required="true" aria-invalid={!!errors.name} aria-describedby={errors.name ? 'name-error' : undefined} />
           <FieldError id="name-error" error={errors.name} />
         </label>
-        <div className="contact-heading"><h4>Informações de contato</h4><span>Preencha pelo menos uma opção</span></div>
+        <div className="contact-heading"><h4>Informações de contato <span className="required">*</span></h4><span>Preencha pelo menos uma opção</span></div>
         <div className="form-grid">
           <label className="field" htmlFor="client-phone">Telefone
             <input id="client-phone" type="tel" inputMode="numeric" autoComplete="tel-national" maxLength={15} placeholder="(42) 99922-2222" value={input.phone} onChange={e => change('phone', e.target.value)} aria-invalid={!!errors.phone || !!errors.contact} aria-describedby="phone-hint phone-error contact-error" />
@@ -68,28 +69,29 @@ export function ClientForm({ onSave, onCreated, onCancel, onBusyChange }: {
         <FieldError id="contact-error" error={errors.contact} />
         {duplicates.length > 0 && <div className="duplicate-notice" role="alert">
           <div className="notice-title"><AlertTriangle size={19} /><strong>Encontramos um cadastro parecido</strong></div>
-          <p>Confira os candidatos retornados pela API antes de criar outro cadastro.</p>
+          <p>Confira os candidatos retornados pela API antes de {initialClient ? 'salvar as alterações' : 'criar outro cadastro'}.</p>
           <ul>{duplicates.map(client => <li key={client.id}><strong>{client.name}</strong><span>{client.code} · {client.phone || client.email}</span></li>)}</ul>
-          <label className="checkbox"><input type="checkbox" checked={duplicateConfirmed} onChange={e => setDuplicateConfirmed(e.target.checked)} />Conferi os dados e quero criar um cadastro separado.</label>
+          <label className="checkbox"><input type="checkbox" checked={duplicateConfirmed} onChange={e => setDuplicateConfirmed(e.target.checked)} />Conferi os dados e confirmo {initialClient ? 'a alteração deste cliente' : 'um cadastro separado'}.</label>
         </div>}
         {saveError && <div className="error-notice" role="alert">{saveError}</div>}
       </div>
       <div className="modal-footer"><span><span className="required">*</span> Campo obrigatório</span><div>
         <button type="button" className="button secondary" onClick={onCancel}>Cancelar</button>
-        <button type="submit" className="button primary" disabled={duplicates.length > 0 && !duplicateConfirmed}><Check size={17} />{saving ? 'Salvando...' : 'Cadastrar cliente'}</button>
+        <button type="submit" className="button primary" disabled={duplicates.length > 0 && !duplicateConfirmed}><Check size={17} />{saving ? 'Salvando...' : initialClient ? 'Salvar alterações' : 'Cadastrar cliente'}</button>
       </div></div>
     </fieldset>
   </form>
 }
 
-export function EquipmentForm({ client, onSave, onCreated, onCancel, onBusyChange }: {
+export function EquipmentForm({ client, onSave, onCreated, onCancel, onBusyChange, initialEquipment }: {
+  initialEquipment?: Equipment
   client: Client
   onSave: (input: EquipmentInput) => Promise<Equipment>
   onCreated: (equipment: Equipment) => void
   onCancel: () => void
   onBusyChange?: (busy: boolean) => void
 }) {
-  const [input, setInput] = useState<EquipmentInput>({ clientId: client.id, type: '', brand: '', model: '', serial: '' })
+  const [input, setInput] = useState<EquipmentInput>({ clientId: client.id, type: initialEquipment?.type ?? '', brand: initialEquipment?.brand ?? '', model: initialEquipment?.model ?? '', serial: initialEquipment?.serial ?? '' })
   const [errors, setErrors] = useState<Errors>({})
   const [saveError, setSaveError] = useState('')
   const [saving, setSaving] = useState(false)
@@ -116,10 +118,10 @@ export function EquipmentForm({ client, onSave, onCreated, onCancel, onBusyChang
       <div className="form-body">
         <div className="form-section-heading"><span className="section-icon"><UserRound size={19} /></span><div><h3>Cliente vinculado</h3><p>{client.name} · {client.code} · {client.phone || client.email}</p></div></div>
         <div className="form-divider" />
-        <div className="form-section-heading"><span className="section-icon"><Monitor size={19} /></span><div><h3>Identificação do equipamento</h3><p>O código interno será gerado pela API para este cliente.</p></div></div>
+        <div className="form-section-heading"><span className="section-icon"><Monitor size={19} /></span><div><h3>Identificação do equipamento</h3><p>{initialEquipment ? `Código interno #${initialEquipment.code} · cliente e código não podem ser alterados.` : 'O código interno será gerado pela API para este cliente.'}</p></div></div>
         <div className="form-grid">
           <label className="field" htmlFor="equipment-type">Tipo <span className="required">*</span>
-            <select autoFocus id="equipment-type" value={input.type} onChange={e => change('type', e.target.value)} aria-required="true" aria-invalid={!!errors.type} aria-describedby="type-error"><option value="">Selecione o tipo</option>{EQUIPMENT_TYPES.map(type => <option key={type}>{type}</option>)}</select><FieldError id="type-error" error={errors.type} />
+            <select autoFocus id="equipment-type" value={input.type} onChange={e => change('type', e.target.value)} aria-required="true" aria-invalid={!!errors.type} aria-describedby="type-error"><option value="">Selecione o tipo</option>{[...new Set([...EQUIPMENT_TYPES, ...(initialEquipment ? [initialEquipment.type] : [])])].map(type => <option key={type}>{type}</option>)}</select><FieldError id="type-error" error={errors.type} />
           </label>
           <label className="field" htmlFor="equipment-brand">Marca <span className="optional">Opcional</span><input id="equipment-brand" maxLength={60} placeholder="Ex.: Samsung" value={input.brand} onChange={e => change('brand', e.target.value)} aria-invalid={!!errors.brand} aria-describedby="brand-error" /><FieldError id="brand-error" error={errors.brand} /></label>
         </div>
@@ -129,7 +131,7 @@ export function EquipmentForm({ client, onSave, onCreated, onCancel, onBusyChang
         </div>
         {saveError && <div className="error-notice" role="alert">{saveError}</div>}
       </div>
-      <div className="modal-footer"><span><span className="required">*</span> Campo obrigatório</span><div><button type="button" className="button secondary" onClick={onCancel}><ArrowLeft size={16} />Voltar</button><button type="submit" className="button primary"><Check size={17} />{saving ? 'Salvando...' : 'Cadastrar equipamento'}</button></div></div>
+      <div className="modal-footer"><span><span className="required">*</span> Campo obrigatório</span><div><button type="button" className="button secondary" onClick={onCancel}><ArrowLeft size={16} />Voltar</button><button type="submit" className="button primary"><Check size={17} />{saving ? 'Salvando...' : initialEquipment ? 'Salvar alterações' : 'Cadastrar equipamento'}</button></div></div>
     </fieldset>
   </form>
 }

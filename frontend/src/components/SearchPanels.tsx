@@ -15,8 +15,8 @@ function Pagination({ page, total, onChange }: { page: number; total: number; on
   </div>
 }
 
-export function ClientSearch({ api, selecting = false, canCreate, onSelect, onDetails, onNewClient }: {
-  api: Api; selecting?: boolean; canCreate: boolean
+export function ClientSearch({ api, selecting = false, canCreate, onSelect, onDetails, onNewClient, revision = 0 }: {
+  api: Api; selecting?: boolean; canCreate: boolean; revision?: number
   onSelect: (client: Client) => void; onDetails: (client: Client) => void; onNewClient: () => void
 }) {
   const [query, setQuery] = useState('')
@@ -25,41 +25,49 @@ export function ClientSearch({ api, selecting = false, canCreate, onSelect, onDe
   const [error, setError] = useState('')
   const [offerCreate, setOfferCreate] = useState(false)
   const [page, setPage] = useState(1)
+  const [submitted, setSubmitted] = useState<{ query: string } | null>(null)
+  const [loadedRevision, setLoadedRevision] = useState(revision)
   const controller = useRef<AbortController | null>(null)
-  useEffect(() => () => controller.current?.abort(), [])
+  const effectiveStatus = submitted && revision !== loadedRevision ? 'loading' : status
 
-  async function search(event: FormEvent) {
+  useEffect(() => {
+    if (!submitted) return
+    const request = new AbortController()
+    controller.current = request
+    void api.searchClients(submitted.query, request.signal).then(result => {
+      if (request.signal.aborted) return
+      setClients(result.clients); setOfferCreate(result.offerCreate); setStatus('success')
+      setError(''); setLoadedRevision(revision); setPage(1)
+    }).catch(cause => {
+      if (request.signal.aborted) return
+      setClients([]); setOfferCreate(false); setError(errorMessage(cause)); setStatus('error')
+      setLoadedRevision(revision)
+    })
+    return () => request.abort()
+  }, [api, submitted, revision])
+
+  function search(event: FormEvent) {
     event.preventDefault()
     controller.current?.abort()
     setClients([]); setOfferCreate(false); setPage(1)
     const validation = validateClientSearch(query)
-    if (validation) { setError(validation); setStatus('error'); return }
-    const request = new AbortController()
-    controller.current = request
-    setError(''); setStatus('loading')
-    try {
-      const result = await api.searchClients(query, request.signal)
-      if (request.signal.aborted) return
-      setClients(result.clients); setOfferCreate(result.offerCreate); setStatus('success')
-    } catch (cause) {
-      if (request.signal.aborted) return
-      setError(errorMessage(cause)); setStatus('error')
-    }
+    if (validation) { setSubmitted(null); setError(validation); setStatus('error'); return }
+    setError(''); setStatus('loading'); setSubmitted({ query: query.trim() })
   }
   function clear() {
-    controller.current?.abort(); setQuery(''); setClients([]); setOfferCreate(false); setError(''); setStatus('idle'); setPage(1)
+    controller.current?.abort(); setSubmitted(null); setQuery(''); setClients([]); setOfferCreate(false); setError(''); setStatus('idle'); setPage(1)
   }
   return <section className="registry-panel" aria-labelledby="client-search-title">
     <div className="panel-heading"><h2 id="client-search-title">{selecting ? 'Selecione o cliente' : 'Buscar clientes'}</h2></div>
     <form className="toolbar" onSubmit={search} role="search" aria-label="Busca de clientes">
       <div className="search-field"><Search size={18} /><input aria-label="Buscar clientes" maxLength={150} placeholder="Nome, telefone ou e-mail (mínimo 2 caracteres)" value={query} onChange={e => setQuery(e.target.value)} />{query && <button type="button" className="icon-button" aria-label="Limpar busca" onClick={clear}><X size={15} /></button>}</div>
-      <button type="submit" className="button primary" disabled={status === 'loading'}><Search size={16} />{status === 'loading' ? 'Buscando...' : 'Buscar'}</button>
+      <button type="submit" className="button primary" disabled={effectiveStatus === 'loading'}><Search size={16} />{effectiveStatus === 'loading' ? 'Buscando...' : 'Buscar'}</button>
     </form>
     {error && <div className="panel-message error-notice" role="alert">{error}</div>}
-    {status === 'loading' && <div className="empty-state" role="status">Buscando clientes...</div>}
-    {status === 'idle' && <div className="empty-state"><UserRound size={32} /><h3>Busque um cliente por nome ou contato</h3>{selecting && <p>Selecione um cliente para consultar seus equipamentos.</p>}</div>}
-    {status === 'success' && clients.length === 0 && <div className="empty-state"><Search size={32} /><h3>Nenhum cliente encontrado</h3>{canCreate && offerCreate && <button className="button secondary" onClick={onNewClient}><Plus size={16} />Cadastrar cliente</button>}</div>}
-    {status === 'success' && clients.length > 0 && <>
+    {effectiveStatus === 'loading' && <div className="empty-state" role="status">Buscando clientes...</div>}
+    {effectiveStatus === 'idle' && <div className="empty-state"><UserRound size={32} /><h3>Busque um cliente por nome ou contato</h3>{selecting && <p>Selecione um cliente para consultar seus equipamentos.</p>}</div>}
+    {effectiveStatus === 'success' && clients.length === 0 && <div className="empty-state"><Search size={32} /><h3>Nenhum cliente encontrado</h3>{canCreate && offerCreate && <button className="button secondary" onClick={onNewClient}><Plus size={16} />Cadastrar cliente</button>}</div>}
+    {effectiveStatus === 'success' && clients.length > 0 && <>
       <div className="table-wrap"><table className="client-search-table"><thead><tr><th>CLIENTE</th><th>CONTATO</th><th><span className="sr-only">Ações</span></th></tr></thead><tbody>
         {clients.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE).map((client, index) => <tr key={client.id}>
           <td><div className="identity-cell"><span className={`client-avatar color-${index % 4}`}>{initials(client.name)}</span><div><button className="row-name" onClick={() => selecting ? onSelect(client) : onDetails(client)}>{client.name}</button><span className="record-code">Cliente {client.code}</span></div></div></td>
