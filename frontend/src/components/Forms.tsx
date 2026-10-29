@@ -54,7 +54,7 @@ export function ClientForm({ onSave, onCreated, onCancel, onBusyChange }: {
           <input id="client-name" autoFocus autoComplete="name" maxLength={150} placeholder="Ex.: Ana Carolina Souza" value={input.name} onChange={e => change('name', e.target.value)} aria-required="true" aria-invalid={!!errors.name} aria-describedby={errors.name ? 'name-error' : undefined} />
           <FieldError id="name-error" error={errors.name} />
         </label>
-        <div className="contact-heading"><h4>Informações de contato</h4><span>Preencha pelo menos uma opção</span></div>
+        <div className="contact-heading"><h4>Informações de contato <span className="required">*</span></h4><span>Preencha pelo menos uma opção</span></div>
         <div className="form-grid">
           <label className="field" htmlFor="client-phone">Telefone
             <input id="client-phone" type="tel" inputMode="numeric" autoComplete="tel-national" maxLength={15} placeholder="(42) 99922-2222" value={input.phone} onChange={e => change('phone', e.target.value)} aria-invalid={!!errors.phone || !!errors.contact} aria-describedby="phone-hint phone-error contact-error" />
