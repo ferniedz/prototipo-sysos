@@ -1,10 +1,10 @@
-// SysOS — modelo de dados (escopo do protótipo: Cliente e Equipamento)
+// SysOS — modelo de dados (escopo do protótipo: Cliente, Equipamento e Ordem de Serviço)
 //
 // Equipamento é ENTIDADE FRACA: não existe sem um Cliente e sua identificação
 // é composta (clienteId + codigoInterno). O codigoInterno é a "chave parcial":
 // numeração sequencial POR CLIENTE (1, 2, 3...), gerada pelo sistema (RN09).
-// Uma futura OS referenciará (clienteId, codigoInterno), o que garante no
-// próprio banco a RN01 (equipamento da OS pertence ao cliente da OS).
+// A OrdemServico referencia (clienteId, equipamentoCodigoInterno), o que garante
+// no próprio banco a RN01 (equipamento da OS pertence ao cliente da OS).
 
 generator client {
   provider = "prisma-client-js"
@@ -62,5 +62,32 @@ model Equipamento {
   // RN20: cliente com equipamento/OS não pode ser excluído (Restrict).
   cliente Cliente @relation(fields: [clienteId], references: [id], onDelete: Restrict, onUpdate: Restrict)
 
+  ordensServico OrdemServico[]
+
   @@id([clienteId, codigoInterno])
+}
+
+// PB04/PB05 — Ordem de serviço. O número é gerado pelo sistema, único e nunca
+// muda (RN03); o status inicial é sempre "Aguardando Diagnóstico" (RN04).
+// A FK composta com Equipamento garante RN01 e, junto com ON DELETE RESTRICT,
+// RN20 (nada apaga o histórico: equipamento/cliente com OS não são excluídos).
+// Como o Cliente é dono do Equipamento, o cliente da OS é o clienteId desta FK.
+model OrdemServico {
+  numero Int @id @default(autoincrement())
+
+  clienteId                Int
+  equipamentoCodigoInterno Int
+
+  problemaRelatado String @db.VarChar(1000) // obrigatório (RN02); CHECK não vazio na migration
+  status           String @default("Aguardando Diagnóstico") @db.VarChar(40)
+
+  // RN22: quem fez e quando (sem FK: contas pertencem ao PB01/PB08)
+  criadoEm    DateTime @default(now())
+  criadoPorId Int
+
+  equipamento Equipamento @relation(fields: [clienteId, equipamentoCodigoInterno], references: [clienteId, codigoInterno], onDelete: Restrict, onUpdate: Restrict)
+
+  @@index([clienteId, status])
+  @@index([status])
+  @@index([clienteId, equipamentoCodigoInterno])
 }

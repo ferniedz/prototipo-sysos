@@ -37,7 +37,7 @@ describe('CORS e contrato HTTP com Express em memória', () => {
 
   it('aplica origens configuradas e não bloqueia chamadas sem Origin', async () => {
     const banco = new BancoMemoria();
-    const app = criarApp({ clientes: banco, equipamentos: banco, jwtSegredo: SEGREDO, origensCors: ['https://sysos.example'] });
+        const app = criarApp({ clientes: banco, equipamentos: banco, ordens: banco, jwtSegredo: SEGREDO, origensCors: ['https://sysos.example'] });
     expect((await injetar(app, { caminho: '/health' })).status).toBe(200);
     const response = await injetar(app, { caminho: '/health', cabecalhos: { Origin: 'https://sysos.example' } });
     expect(response.headers['access-control-allow-origin']).toBe('https://sysos.example');

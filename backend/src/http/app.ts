@@ -1,4 +1,5 @@
 import express, { Express, Router } from 'express';
+import { OrdemServicoRepositorio } from '../dominio/ordemServico';
 import { ClienteRepositorio, EquipamentoRepositorio } from '../dominio/tipos';
 import {
   buscaSchema,
@@ -8,13 +9,16 @@ import {
 } from '../dominio/validacao';
 import { ClienteServico } from '../servicos/clienteServico';
 import { EquipamentoServico } from '../servicos/equipamentoServico';
+import { OrdemServicoServico } from '../servicos/ordemServicoServico';
 import { AppError } from '../shared/erros';
 import { aguardar, autenticar, exigirPerfil, tratarErros } from './middlewares';
 import { cors, ORIGENS_PADRAO } from './cors';
+import { criarRotasOs } from './rotasOs';
 
 export interface Dependencias {
   clientes: ClienteRepositorio;
   equipamentos: EquipamentoRepositorio;
+  ordens: OrdemServicoRepositorio;
   jwtSegredo: string;
   origensCors?: readonly string[];
 }
@@ -30,6 +34,7 @@ const LEITURA = exigirPerfil('ATENDENTE', 'TECNICO');
 export function criarApp(dep: Dependencias): Express {
   const clienteServico = new ClienteServico(dep.clientes);
   const equipamentoServico = new EquipamentoServico(dep.clientes, dep.equipamentos);
+  const ordemServico = new OrdemServicoServico(dep.clientes, dep.equipamentos, dep.ordens);
 
   const app = express();
   app.disable('x-powered-by');
@@ -151,6 +156,9 @@ export function criarApp(dep: Dependencias): Express {
       res.json(await equipamentoServico.excluir(clienteId, codigo));
     }),
   );
+
+  // --- Ordens de serviço (PB04 abrir, PB05 consultar) ---------------------
+  api.use('/ordens-servico', criarRotasOs(ordemServico));
 
   // Rota desconhecida (ex.: PATCH, que não é usado): 404 padronizado.
   api.use((_req, _res, next) => {

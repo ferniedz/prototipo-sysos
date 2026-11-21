@@ -4,6 +4,8 @@ module.exports = {
   testEnvironment: 'node',
   roots: ['<rootDir>/tests'],
   testMatch: ['**/*.test.ts'],
+  // Os testes de integração usam o mesmo banco e fazem TRUNCATE: não podem rodar em paralelo.
+  maxWorkers: 1,
   collectCoverageFrom: [
     'src/**/*.ts',
     '!src/server.ts', // ponto de entrada

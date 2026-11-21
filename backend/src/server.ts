@@ -5,6 +5,7 @@ import {
   ClientePrismaRepositorio,
   EquipamentoPrismaRepositorio,
 } from './infra/prismaRepositorios';
+import { OrdemServicoPrismaRepositorio } from './infra/prismaOrdemServico';
 
 const config = carregarConfig();
 const prisma = new PrismaClient();
@@ -12,6 +13,7 @@ const prisma = new PrismaClient();
 const app = criarApp({
   clientes: new ClientePrismaRepositorio(prisma),
   equipamentos: new EquipamentoPrismaRepositorio(prisma),
+  ordens: new OrdemServicoPrismaRepositorio(prisma),
   jwtSegredo: config.jwtSegredo,
   origensCors: config.origensCors,
 });

@@ -41,7 +41,20 @@ Claude Sonnet 5.5. Data: 21/10/2026.
   shell (npm, TypeScript, Jest).
 - Não houve uso de subagentes.
 
-## Sessão 2 — CRUD completo de clientes e equipamentos (28/10/2026)
+## Sessão 1 — Validação e limitações
+
+- No ambiente da IA, o download dos binários do Prisma foi bloqueado, então ali
+  só rodaram os 50 testes de regras (repositório em memória) e o type-check.
+- A validação com banco real foi feita pelo grupo em 22/10/2026: `prisma migrate
+  deploy` aplicou a migration (escrita à mão pela IA), a API foi testada com
+  PostgreSQL local (cadastro de cliente, equipamento e buscas) e a suíte de
+  integração passou (4 testes: código interno concorrente, CHECK de contato,
+  bloqueio de exclusão e busca/duplicidade).
+- Pendências conhecidas: login (PB01) e demais itens fora do escopo; o relatório
+  `npm audit` aponta vulnerabilidades em dependências de desenvolvimento, a
+  tratar em sprint futura.
+
+  ## Sessão 2 — CRUD completo de clientes e equipamentos (28/10/2026)
 
 Pedido do grupo: completar o CRUD (alterar e excluir) apenas no backend,
 mantendo o que já funcionava; o frontend é de outro integrante.
@@ -78,15 +91,49 @@ confere os tipos do Prisma). Foram escritos 9 novos testes de integração em
 (`npx prisma generate`, `npx prisma migrate deploy`, `npm run test:int`) antes
 de considerar o CRUD validado de ponta a ponta.
 
-## Validação e limitações (sessão 1)
+**Defeito encontrado pela suíte de integração do grupo (28/10/2026):** ao rodar
+`npm run test:int`, 12 dos 13 testes passaram e 1 falhou: excluir cliente com
+equipamento devia devolver `EM_USO` (409), mas o PostgreSQL do grupo respondeu
+com SQLSTATE `23001` ("violates RESTRICT setting"), que o Prisma entrega como
+erro **sem código** (`PrismaClientUnknownRequestError`). O código só tratava o
+`P2003`, então a API devolveria 500 em vez de 409. Correção: classificação dos
+erros isolada em `src/infra/errosBanco.ts` (reconhece `P2003`/`P2014`, SQLSTATE
+`23001`/`23503` e o texto da mensagem), mais uma conferência por contagem de
+equipamentos como rede de segurança; teste unitário `tests/errosBanco.test.ts`
+com a mensagem real do erro. Isso mostra o valor da suíte com banco real, que a
+IA não conseguiu executar. A IA não executou o código Prisma; a
+correção só está confirmada quando o grupo rodar de novo `npm run test:int` e o
+teste "RN20: excluir cliente com equipamento retorna EM_USO" passar.
 
-- No ambiente da IA, o download dos binários do Prisma foi bloqueado, então ali
-  só rodaram os 50 testes de regras (repositório em memória) e o type-check.
-- A validação com banco real foi feita pelo grupo em 22/10/2026: `prisma migrate
-  deploy` aplicou a migration (escrita à mão pela IA), a API foi testada com
-  PostgreSQL local (cadastro de cliente, equipamento e buscas) e a suíte de
-  integração passou (4 testes: código interno concorrente, CHECK de contato,
-  bloqueio de exclusão e busca/duplicidade).
-- Pendências conhecidas: login (PB01) e demais itens fora do escopo; o relatório
-  `npm audit` aponta vulnerabilidades em dependências de desenvolvimento, a
-  tratar em sprint futura.
+  
+## Sessão 3 — Abrir e consultar ordem de serviço (20/11/2026)
+
+Pedido do grupo: reaproveitar o projeto na disciplina de Desenvolvimento Web
+(Trabalho 02 — React, API REST própria) e implementar **apenas o backend** da
+geração da OS; o frontend é de outro integrante.
+
+1. **Leitura dos documentos** do projeto (Requisitos e RN, Product Backlog):
+   PB04 (abrir OS), PB05 (consultar OS), RF09–RF15, RN01–RN06 e o caso de uso
+   "Abrir OS". Pontos que os documentos deixam em aberto foram marcados como
+   **proposta** (OS em aberto, bloqueio x confirmação, matriz de acesso).
+2. **Banco antes do código:** migration `0003_ordem_servico` com FK composta
+   para o equipamento (RN01), `RESTRICT` (RN20) e CHECK do problema (RN02),
+   aplicada e testada em PostgreSQL 16 real (recusa de equipamento de outro
+   cliente, problema vazio e exclusão de equipamento/cliente com OS).
+3. **Implementação** nas mesmas camadas: validação (zod) → serviço → repositório
+   (Prisma) → rotas Express com login e perfil (RF02).
+4. **Testes:** 21 novos testes com repositório em memória (136 no total, sem
+   banco) e 7 testes de integração para o banco real. Verificação por mutação:
+   três falhas injetadas de propósito (sem aviso de OS em aberto, sem conferir o
+   dono do equipamento, status inicial errado) foram detectadas pelos testes.
+5. **Documentação da API** em `docs/ORDEM_SERVICO.md` (exigida pela atividade:
+   "descrição da API em repositório GitHub").
+
+**Skills:** nenhuma skill específica. Ferramentas: leitura dos PDFs, shell (npm,
+TypeScript, Jest, `psql`), sem subagentes.
+
+**Limitações:** o download dos binários do Prisma segue bloqueado no ambiente da
+IA, então o **código do repositório Prisma da OS** (`prismaOrdemServico.ts`)
+**não foi executado** pela IA. Os testes de integração `ordens.int.test.ts`
+precisam ser executados pelo grupo (`npx prisma generate`,
+`npx prisma migrate deploy`, `npm run test:int`).

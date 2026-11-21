@@ -235,3 +235,13 @@ npm test -- --runInBand cors.test.ts
 ```
 
 Essa suíte usa o Express e os serviços reais com repositórios em memória e injeção HTTP sem abrir portas. Ela verifica CORS, preservação do JWT nas operações efetivas e os contratos de cadastro/busca usados pelo frontend. Os demais testes HTTP continuam usando Supertest. Os testes de PostgreSQL não são necessários para verificar CORS e não foram executados nesta adaptação.
+
+## Ordens de serviço (PB04 e PB05)
+
+Além do cadastro de clientes e equipamentos, a API **abre e consulta ordens de
+serviço**: `POST /api/ordens-servico`, `GET /api/ordens-servico?clienteId=&status=`
+e `GET /api/ordens-servico/:numero`. A descrição completa (corpo, respostas,
+erros, regras e decisões) está em [`docs/ORDEM_SERVICO.md`](docs/ORDEM_SERVICO.md).
+
+Depois de atualizar o código, rode `npx prisma generate` e `npx prisma migrate deploy`
+(a migration `0003_ordem_servico` cria a tabela nova sem alterar os dados existentes).

@@ -1,4 +1,12 @@
 import {
+  FiltroOrdens,
+  NovaOrdemServico,
+  OrdemServico,
+  OrdemServicoRepositorio,
+  STATUS_ENCERRADOS,
+  STATUS_INICIAL,
+} from '../../src/dominio/ordemServico';
+import {
   AtualizacaoCliente,
   AtualizacaoEquipamento,
   Cliente,
@@ -11,9 +19,13 @@ import {
 } from '../../src/dominio/tipos';
 
 /** Repositórios em memória com a mesma semântica dos repositórios Prisma. */
-export class BancoMemoria implements ClienteRepositorio, EquipamentoRepositorio {
+export class BancoMemoria
+  implements ClienteRepositorio, EquipamentoRepositorio, OrdemServicoRepositorio
+{
   clientes: Cliente[] = [];
   equipamentos: Equipamento[] = [];
+  ordens: OrdemServico[] = [];
+  private proxNumero = 1; // sequência da OS: nunca reaproveita número (RN03)
   private proxId = 1;
   private contador = new Map<number, number>();
 
@@ -129,6 +141,7 @@ export class BancoMemoria implements ClienteRepositorio, EquipamentoRepositorio 
     if (i < 0) return { resultado: 'NAO_ENCONTRADO' };
     // espelha a FK com RESTRICT (RN20)
     if (this.equipamentos.some((e) => e.clienteId === id)) return { resultado: 'EM_USO' };
+    if (this.ordens.some((o) => o.clienteId === id)) return { resultado: 'EM_USO' };
     const [removido] = this.clientes.splice(i, 1);
     this.contador.delete(id);
     return { resultado: 'EXCLUIDO', registro: removido! };
@@ -142,6 +155,14 @@ export class BancoMemoria implements ClienteRepositorio, EquipamentoRepositorio 
       (e) => e.clienteId === clienteId && e.codigoInterno === codigoInterno,
     );
     if (i < 0) return { resultado: 'NAO_ENCONTRADO' };
+    // espelha a FK da OS com RESTRICT (RN20)
+    if (
+      this.ordens.some(
+        (o) => o.clienteId === clienteId && o.equipamentoCodigoInterno === codigoInterno,
+      )
+    ) {
+      return { resultado: 'EM_USO' };
+    }
     // o contador do cliente não volta: o código excluído não é reaproveitado
     const [removido] = this.equipamentos.splice(i, 1);
     return { resultado: 'EXCLUIDO', registro: removido! };
@@ -175,5 +196,49 @@ export class BancoMemoria implements ClienteRepositorio, EquipamentoRepositorio 
         (e) => e.clienteId === clienteId && e.codigoInterno === codigoInterno,
       ) ?? null
     );
+  }
+
+  // --- OrdemServicoRepositorio ---------------------------------------------
+
+  async abrir(d: NovaOrdemServico): Promise<OrdemServico> {
+    // espelha a FK composta (RN01): equipamento precisa existir no cliente
+    if (!this.equipamentos.some((e) => e.clienteId === d.clienteId && e.codigoInterno === d.equipamentoCodigoInterno)) {
+      throw new Error('fk violada');
+    }
+    if (d.problemaRelatado.trim() === '') throw new Error('check violado'); // RN02
+    const o: OrdemServico = {
+      numero: this.proxNumero++,
+      ...d,
+      status: STATUS_INICIAL, // RN04
+      criadoEm: new Date(),
+    };
+    this.ordens.push(o);
+    return o;
+  }
+
+  async buscarPorNumero(numero: number) {
+    return this.ordens.find((o) => o.numero === numero) ?? null;
+  }
+
+  async listar(f: FiltroOrdens) {
+    return this.ordens
+      .filter(
+        (o) =>
+          (f.clienteId === undefined || o.clienteId === f.clienteId) &&
+          (f.status === undefined || o.status === f.status),
+      )
+      .sort((a, b) => b.numero - a.numero)
+      .slice(0, f.limite);
+  }
+
+  async buscarEmAbertoDoEquipamento(clienteId: number, codigo: number) {
+    return this.ordens
+      .filter(
+        (o) =>
+          o.clienteId === clienteId &&
+          o.equipamentoCodigoInterno === codigo &&
+          !(STATUS_ENCERRADOS as readonly string[]).includes(o.status),
+      )
+      .sort((a, b) => a.numero - b.numero);
   }
 }

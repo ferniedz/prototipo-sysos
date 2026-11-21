@@ -11,16 +11,9 @@ import {
   ResultadoExclusao,
 } from '../dominio/tipos';
 
+import { registroNaoExiste, violacaoDeVinculo } from './errosBanco';
+
 /** Única camada que conhece o Prisma/PostgreSQL. */
-
-function codigoPrisma(e: unknown): string | undefined {
-  return typeof e === 'object' && e !== null ? (e as { code?: string }).code : undefined;
-}
-
-/** P2025: registro não existe. */
-const NAO_ENCONTRADO = 'P2025';
-/** P2003/P2014: o banco recusou por haver registros dependentes (RESTRICT). */
-const EM_USO = ['P2003', 'P2014'];
 
 export class ClientePrismaRepositorio implements ClienteRepositorio {
   constructor(private readonly prisma: PrismaClient) {}
@@ -93,7 +86,7 @@ export class ClientePrismaRepositorio implements ClienteRepositorio {
       });
       return paraCliente(c);
     } catch (e) {
-      if (codigoPrisma(e) === NAO_ENCONTRADO) return null;
+      if (registroNaoExiste(e)) return null;
       throw e;
     }
   }
@@ -103,9 +96,14 @@ export class ClientePrismaRepositorio implements ClienteRepositorio {
       const c = await this.prisma.cliente.delete({ where: { id } });
       return { resultado: 'EXCLUIDO', registro: paraCliente(c) };
     } catch (e) {
-      const codigo = codigoPrisma(e);
-      if (codigo === NAO_ENCONTRADO) return { resultado: 'NAO_ENCONTRADO' };
-      if (codigo !== undefined && EM_USO.includes(codigo)) return { resultado: 'EM_USO' };
+      if (registroNaoExiste(e)) return { resultado: 'NAO_ENCONTRADO' };
+      if (violacaoDeVinculo(e)) return { resultado: 'EM_USO' };
+      // Rede de segurança: se o formato do erro do banco não for reconhecido,
+      // confere se o motivo é a existência de equipamentos (o que a FK RESTRICT
+      // recusa). Só classifica como "em uso" se o vínculo realmente existe.
+      if ((await this.prisma.equipamento.count({ where: { clienteId: id } })) > 0) {
+        return { resultado: 'EM_USO' };
+      }
       throw e;
     }
   }
@@ -183,7 +181,7 @@ export class EquipamentoPrismaRepositorio implements EquipamentoRepositorio {
         },
       });
     } catch (e) {
-      if (codigoPrisma(e) === NAO_ENCONTRADO) return null;
+      if (registroNaoExiste(e)) return null;
       throw e;
     }
   }
@@ -198,11 +196,10 @@ export class EquipamentoPrismaRepositorio implements EquipamentoRepositorio {
       });
       return { resultado: 'EXCLUIDO', registro: eq };
     } catch (e) {
-      const codigo = codigoPrisma(e);
-      if (codigo === NAO_ENCONTRADO) return { resultado: 'NAO_ENCONTRADO' };
+      if (registroNaoExiste(e)) return { resultado: 'NAO_ENCONTRADO' };
       // Hoje não há tabela que referencie o equipamento; quando a OS existir,
       // a FK com RESTRICT fará o banco recusar e cairá neste caso.
-      if (codigo !== undefined && EM_USO.includes(codigo)) return { resultado: 'EM_USO' };
+      if (violacaoDeVinculo(e)) return { resultado: 'EM_USO' };
       throw e;
     }
   }
